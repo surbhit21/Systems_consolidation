@@ -1,7 +1,7 @@
 import ANNarchy as ann
 import matplotlib.pyplot as plt
 import numpy as np
-from plaotting_widget import before_after_weights, plot_activity,plot_weights_over_time,plot_row_correlations
+from plaotting_widget import plot_activity_n_excitability_time,plot_weights_over_time,plot_row_correlations,plot_consecutive_day_correlation
 
 
 LIneuron = ann.Neuron(
@@ -62,7 +62,7 @@ ID = 1000 #inter-day delay
 delta = 35 # input current
 theta = 5 #threshold firing rate for active neurons
 c = 1 #cap pn recurrent weights
-E = 1.5 # excitability increase factor for neurons
+E = 3 # excitability increase factor for neurons
 thr = 1
 # normal distribution parameters for excitability
 mu = 0
@@ -87,7 +87,7 @@ for i in range(num_days):
     for j in range(Nrep):
         seed = j
         # setting a random seed
-        np.random.seed(seed)
+        np.random.default_rng(j)
         # stim_phase 
         # input is set for all neurons in the population
         E_pop[:].input_i = np.array(num_HPC_E_neuron*[delta])
@@ -123,13 +123,15 @@ inps =E_input_monitor.get('inp').T
 # before_after_weights(weights[3],weights[4],"days3-4","./plots/delamare_2024_F1d2.png",cmaps= 'gray')
 rs = np.where(rs > thr, rs, 0)
 # breakpoint()
-plot_weights_over_time([rs,exs],
+E_name = str(E).replace('.','_')
+plot_activity_n_excitability_time([rs,exs],
                        titles=['Neuronal Activity',
                                 'Neuronal Excitability'],
-                       fname="./plots/delamare_2024_F1AB.png",
+                       fname="./plots/E_%s/delamare_2024_F1AB.png"%E_name,
                        cmaps=['Blues', 'Greens', 'Reds'])
 plot_weights_over_time(weights,
                        titles=[f'Day {i+1}' for i in range(len(weights))],
-                       fname="./plots/delamare_2024_F1C.png",
+                       fname="./plots/E_%s/delamare_2024_F1C.png"%E_name,
                        cmaps='gray_r')
-plot_row_correlations(np.array(activity_vector), fname="./plots/delamare_2024_F2A.png")
+plot_row_correlations(np.array(activity_vector), fname="./plots/E_%s/delamare_2024_F2A.png"%E_name)
+plot_consecutive_day_correlation(np.array(activity_vector), fname="./plots/E_%s/dayN_N_1_corr.png"%E_name)

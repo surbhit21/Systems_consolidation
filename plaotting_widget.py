@@ -1,6 +1,9 @@
 import os
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
+# import seaborn as sns
+
 def ensure_dir_exists(file_path):
     """
     Ensures that the directory for the given file path exists.
@@ -78,7 +81,39 @@ def plot_activities(activity1, activity2, title,var_name, fname, color1='red', c
     # save_plot(fname)  # Uncomment if saving is needed
     plt.show()
     
-def plot_weights_over_time(weights, titles, fname, cmaps='hot'):
+def plot_weights_over_time(weights, titles, fname, cmaps='hot',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
+    """
+    Plots weight matrices from different time points in one row.
+
+    Args:
+        weights: List of 2D numpy arrays representing weights.
+        titles: List of titles for each subplot.
+        fname: Filename to save the complete figure.
+        cmaps: List of colormaps (or a single colormap) for the subplots.
+    """
+    num_plots = len(weights)
+    fig = plt.figure(figsize=(5 * num_plots, 5))
+    gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
+
+    ims = []
+    for idx, (w, title) in enumerate(zip(weights, titles)):
+        cmap = cmaps[idx] if isinstance(cmaps, list) else cmaps
+        ax = fig.add_subplot(gs[0, idx])
+        im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto')
+        ims.append(im)
+        ax.set_title(title, fontsize=title_fontsize)
+        ax.tick_params(labelsize=tick_fontsize)
+
+    # Shared colorbar
+    cax = fig.add_subplot(gs[0, -1])
+    cbar = fig.colorbar(ims[0], cax=cax)
+    cbar.ax.tick_params(labelsize=colorbar_fontsize)
+
+    plt.tight_layout()
+    save_plot(fname)
+    plt.show()
+    
+def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
     """
     Plots weight matrices from different time points in one row.
 
@@ -94,15 +129,17 @@ def plot_weights_over_time(weights, titles, fname, cmaps='hot'):
     for idx, (w, title) in enumerate(zip(weights, titles)):
         cmap = cmaps[idx] if isinstance(cmaps, list) else cmaps
 
-        plt.subplot(1, num_plots, idx + 1)
-        plt.title(title)
-        plt.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto')
-        plt.colorbar()
+        ax = plt.subplot(1, num_plots, idx + 1)
+        im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto')
+        ax.set_title(title, fontsize=title_fontsize)
+        ax.tick_params(labelsize=tick_fontsize)
+
+        cbar = plt.colorbar(im)
+        cbar.ax.tick_params(labelsize=colorbar_fontsize)
 
     plt.tight_layout()
     save_plot(fname)
     plt.show()
-
 def plot_row_correlations(data_3d, fname):
     """
     Plots the correlation between the reference row and all other rows in the matrix.
@@ -145,3 +182,43 @@ def plot_row_correlations(data_3d, fname):
     save_plot(fname)
     plt.show()
 
+def plot_consecutive_day_correlation(data_3d,fname):
+    """
+    Plots average neuron correlation (with std) between consecutive days, repetition-wise.
+
+    Parameters:
+        data_3d (np.ndarray): 3D array of shape (days, repetitions, neurons)
+    """
+    days, reps, neurons = data_3d.shape
+    mean_corrs = []
+    std_corrs = []
+    day_labels = []
+
+    for day in range(1, days):
+        rep_corrs = []
+        for rep in range(reps):
+            corr = np.corrcoef(data_3d[day - 1, rep], data_3d[day, rep])[0, 1]
+            rep_corrs.append(corr)
+        mean_corrs.append(np.mean(rep_corrs))
+        std_corrs.append(np.std(rep_corrs))
+        day_labels.append(f"{day-1}-{day}")
+
+    # Plot with error bars
+    plt.figure(figsize=(8, 4))
+    plt.errorbar(
+        x=range(1, days),
+        y=mean_corrs,
+        yerr=std_corrs,
+        fmt='-o',
+        capsize=5,
+        ecolor='gray',
+        color='green'
+    )
+    plt.title("Neuron Correlation Between Consecutive Days")
+    plt.xlabel("Day Pair")
+    plt.ylabel("Correlation")
+    plt.xticks(ticks=range(1, days), labels=day_labels)
+    plt.ylim(-1, 1)
+    # plt.grid(True)
+    save_plot(fname)
+    plt.show()
