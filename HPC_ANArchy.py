@@ -90,10 +90,10 @@ IE_final_weights = IE_proj.connectivity_matrix()
 II_final_weights = II_proj.connectivity_matrix()
 
 
-plot_activity(HPC_E_act_monitor,"HPC netowrk excitatory neuron activity", "./plots/HPC_E_activity.png")
-plot_activity(HPC_I_act_monitor,"HPC netowrk inhibitory neuron activity", "./plots/HPC_E_activity.png")
+plot_activity(HPC_E_act_monitor,'r',"HPC netowrk excitatory neuron activity", "./plots/HPC_E_activity.png")
+plot_activity(HPC_I_act_monitor,'r',"HPC netowrk inhibitory neuron activity", "./plots/HPC_E_activity.png")
 
-before_after_weights(EE_initial_weights, EE_final_weights, "W_{EE}" ,"./plots/HPC_EE_weights.png")
-before_after_weights(EI_initial_weights, EI_final_weights, "W_{EI}" ,"./plots/HPC_EI_weights.png")
-before_after_weights(IE_initial_weights, IE_final_weights, "W_{IE}" ,"./plots/HPC_IE_weights.png")
-before_after_weights(II_initial_weights, II_final_weights, "W_{II}" ,"./plots/HPC_II_weights.png")
+before_after_weights(EE_initial_weights, EE_final_weights, "Initial W_{EE}" ,"Final W_{EE}" ,"./plots/HPC_EE_weights.png")
+before_after_weights(EI_initial_weights, EI_final_weights, "Initial W_{EI}" ,"Final W_{EI}" ,"./plots/HPC_EI_weights.png")
+before_after_weights(IE_initial_weights, IE_final_weights, "Initial W_{IE}" ,"Final W_{IE}" ,"./plots/HPC_IE_weights.png")
+before_after_weights(II_initial_weights, II_final_weights, "Initial W_{II}" ,"Final W_{II}" ,"./plots/HPC_II_weights.png")
