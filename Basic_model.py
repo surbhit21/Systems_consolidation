@@ -93,3 +93,4 @@ plt.legend([f'Neuron {i}' for i in range(num_neurons)])
 # plt.grid()
 plt.show()
 # The code defines a rate network model, simulates its behavior over time, and visualizes the outputs of the neurons.
+

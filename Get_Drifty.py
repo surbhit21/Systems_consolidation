@@ -1,7 +1,7 @@
 import ANNarchy as ann
 import matplotlib.pyplot as plt
 import numpy as np
-from plaotting_widget import plot_activity_n_excitability_time,plot_weights_over_time,plot_row_correlations,plot_consecutive_day_correlation
+from plotting_widget import plot_activity_n_excitability_time,plot_weights_over_time,plot_row_correlations,plot_consecutive_day_correlation
 
 
 LIneuron = ann.Neuron(
@@ -27,17 +27,18 @@ LIneuron = ann.Neuron(
 E_synapse = ann.Synapse(
     parameters = dict(
         tau_w = 1000,
+        lr = 1,
         tau_decay = 1000,
         max_weight = 0.4,
         min_weight = 0.0,
     ),
     equations = [
-        'dw/dt = ((pre.r * post.r)/tau_w - w/tau_decay) : min = min_weight, max = max_weight'
+        'dw/dt = (lr*(pre.r * post.r)/tau_w - w/tau_decay) : min = min_weight, max = max_weight'
         # 'Bounded(x) = np.clip(x, 0, 1)'
     ]
 )
 
-num_HPC_E_neuron = 50
+num_HPC_E_neuron = 70
 
 net = ann.Network()
 E_pop = net.create(geometry=num_HPC_E_neuron, neuron=LIneuron, name='E_pop')
@@ -51,18 +52,18 @@ net.compile(clean=True)
 
 # Simulation parameters
 Nrep = 10 # number of repetitions
-T = 100 # duration of repetitions
+T = 200 # duration of repetitions
 IR = 100 # Inter-repetition interval
 del_t = 1 # time step
 
 
-num_days = 4 # number of days in the simulation
+num_days = 7 # number of days in the simulation
 ID = 1000 #inter-day delay
 
-delta = 35 # input current
+delta = 50 # input current
 theta = 5 #threshold firing rate for active neurons
 c = 1 #cap pn recurrent weights
-E = 3 # excitability increase factor for neurons
+E = 2 # excitability increase factor for neurons
 thr = 1
 # normal distribution parameters for excitability
 mu = 0
@@ -78,6 +79,7 @@ weights = []
 # weights.append(EE_proj.connectivity_matrix())
 net.simulate(ID//2)
 # E_pop[:].excitabilty = np.array([0]*num_HPC_E_neuron)
+np.random.seed(2025)
 orig_exitability = np.abs(np.random.uniform(mu, sigma, num_HPC_E_neuron))
 np.random.seed(2)
 E_pop[:].excitabilty = orig_exitability
@@ -87,14 +89,18 @@ for i in range(num_days):
     for j in range(Nrep):
         seed = j
         # setting a random seed
-        np.random.default_rng(j)
+        # np.random.default_rng(j)
         # stim_phase 
         # input is set for all neurons in the population
         E_pop[:].input_i = np.array(num_HPC_E_neuron*[delta])
         # exitability is drawn from a uniform distri
         # now based on day the exicitability is increased by a factor of E for some neurons
         E_pop[:].excitabilty = orig_exitability
-        E_pop[(i+1)*10:(i+1)*10+10].excitabilty += E
+        E_pop[(i)*10:(i)*10+10].excitabilty += E
+        # if i == 2:
+        #     EE_proj.lr = 0
+        # else:
+        #     EE_proj.lr = 1
         # run the simulation for T seconds
         net.simulate(T)
         # print(E_pop[1].r)
@@ -104,6 +110,7 @@ for i in range(num_days):
         # excitability remains elevated for the same neurons
         net.simulate(IR)
         activity_vector[i].append(E_pop[:].r)
+        # breakpoint()
     activity_vector[i] = np.array(activity_vector[i])
     net.simulate(ID)
     weights.append(EE_proj.connectivity_matrix())
@@ -133,5 +140,6 @@ plot_weights_over_time(weights,
                        titles=[f'Day {i+1}' for i in range(len(weights))],
                        fname="./plots/E_%s/delamare_2024_F1C.png"%E_name,
                        cmaps='gray_r')
-plot_row_correlations(np.array(activity_vector), fname="./plots/E_%s/delamare_2024_F2A.png"%E_name)
+plot_row_correlations(np.array(activity_vector), fname="./plots/E_%s/encoding_corr.png"%E_name, use_bar_plot=True)
+plot_row_correlations(np.array(activity_vector), fname="./plots/E_%s/Recall_corr.png"%E_name, ref_index=-1, use_bar_plot=True)
 plot_consecutive_day_correlation(np.array(activity_vector), fname="./plots/E_%s/dayN_N_1_corr.png"%E_name)

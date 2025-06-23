@@ -37,7 +37,7 @@ def save_plot(filename):
     plt.tight_layout()
     plt.savefig(filename, bbox_inches='tight', dpi=300)
 
-def before_after_weights(initial_weights, final_weights,title1,title2,fname,cmaps = 'hot'):
+def before_after_weights(initial_weights, final_weights,title1,title2,fname,cmaps = 'gray_r'):
     plt.figure(figsize=(10, 5))
     plt.subplot(121)
     plt.title(r'$%s$'% title1)
@@ -140,7 +140,7 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_
     plt.tight_layout()
     save_plot(fname)
     plt.show()
-def plot_row_correlations(data_3d, fname):
+def plot_row_correlations(data_3d, fname,ref_index=0, use_bar_plot=False,font_size=14, tick_fontsize=14):
     """
     Plots the correlation between the reference row and all other rows in the matrix.
     
@@ -156,27 +156,40 @@ def plot_row_correlations(data_3d, fname):
     for day in range(days):
         rep_correlations = []
         for rep in range(reps):
-            corr = np.corrcoef(data_3d[0, rep], data_3d[day, rep])[0, 1]
+            corr = np.corrcoef(data_3d[ref_index, rep], data_3d[day, rep])[0, 1]
             rep_correlations.append(corr)
         mean_correlations.append(np.mean(rep_correlations))
         std_correlations.append(np.std(rep_correlations))
 
     # Plot
     fig,ax  = plt.subplots(figsize=(8, 4))
-    plt.errorbar(
-        x=range(days),
-        y=mean_correlations,
-        yerr=std_correlations,
-        fmt='-o',
-        capsize=5,
-        ecolor='gray',
-        color='blue'
-    )
+    if use_bar_plot:
+        ax.bar(
+            x=range(days),
+            height=mean_correlations,
+            yerr=std_correlations,
+            capsize=5,
+            color='blue',
+            alpha=0.7,
+            edgecolor='black'
+        )
+    else:
+        plt.errorbar(
+            x=range(days),
+            y=mean_correlations,
+            yerr=std_correlations,
+            fmt='-o',
+            capsize=5,
+            ecolor='gray',
+            color='blue'
+        )
     ax.spines[["right", "top"]].set_visible(False)
     # plt.title("Neuron Correlation with Day 0 Over Days")
-    plt.xlabel("Elapsed time (days)")
-    plt.ylabel("Ensemble activity corr.")
+    plt.xlabel("Elapsed time (days)",fontsize =font_size)
+    plt.ylabel("Ensemble activity corr.",fontsize =font_size)
     plt.xticks(range(days))
+    ax.tick_params(labelsize=tick_fontsize)
+
     # plt.ylim(-1, 1)
     plt.tight_layout()
     save_plot(fname)
