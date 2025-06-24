@@ -81,7 +81,7 @@ def plot_activities(activity1, activity2, title,var_name, fname, color1='red', c
     # save_plot(fname)  # Uncomment if saving is needed
     plt.show()
     
-def plot_weights_over_time(weights, titles, fname, cmaps='hot',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
+def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
     """
     Plots weight matrices from different time points in one row.
 
@@ -94,12 +94,16 @@ def plot_weights_over_time(weights, titles, fname, cmaps='hot',title_fontsize=14
     num_plots = len(weights)
     fig = plt.figure(figsize=(5 * num_plots, 5))
     gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
-
+    vmin = min(w.min() for w in weights)
+    vmax = max(w.max() for w in weights)
+    vmin = min(-1,vmin)
+    vmax = max(1,vmax)
+    # im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto', vmin=vmin, vmax=vmax)
     ims = []
     for idx, (w, title) in enumerate(zip(weights, titles)):
         cmap = cmaps[idx] if isinstance(cmaps, list) else cmaps
         ax = fig.add_subplot(gs[0, idx])
-        im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto')
+        im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto', vmin=vmin, vmax=vmax)
         ims.append(im)
         ax.set_title(title, fontsize=title_fontsize)
         ax.tick_params(labelsize=tick_fontsize)

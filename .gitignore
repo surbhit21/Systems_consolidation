@@ -197,3 +197,6 @@ cython_debug/
 # skipping annarchy builds for now
 annarchy
 build
+# project related folders and file
+plots
+*.png
