@@ -158,7 +158,7 @@ CTX_E_pop[:].I_ext = PATTERN_A
 CTX_I_pop[:].I_ext =0.5 * PATTERN_A
 
 Can_network.config(dt=0.1)
-Can_network.simulate(10)
+Can_network.simulate(100)
 
 # for i in range(7):
 #     HPC_E_pop[:].I_ext =  HPC_I_pop[:].I_ext = CTX_E_pop[:].I_ext = CTX_I_pop[:].I_ext = np.zeros(num_CTX_E_neuron)

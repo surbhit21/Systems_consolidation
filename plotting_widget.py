@@ -2,6 +2,8 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
+from Utilities import center_of_mass_rowwise, center_of_mass_columnwise_blocked
+
 # import seaborn as sns
 
 def ensure_dir_exists(file_path):
@@ -60,7 +62,7 @@ def plot_activity(activity, title,var_name, fname,c):
     plt.title(title)
     plt.xlabel('Time (s)')
     plt.ylabel(var_name)
-    # save_plot(fname)
+    save_plot(fname)
     plt.show()
     
 def plot_activities(activity1, activity2, title,var_name, fname, color1='red', color2='blue'):
@@ -96,8 +98,6 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
     gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
     vmin = min(w.min() for w in weights)
     vmax = max(w.max() for w in weights)
-    vmin = min(-1,vmin)
-    vmax = max(1,vmax)
     # im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto', vmin=vmin, vmax=vmax)
     ims = []
     for idx, (w, title) in enumerate(zip(weights, titles)):
@@ -128,7 +128,7 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_
         cmaps: List of colormaps (or a single colormap) for the subplots.
     """
     num_plots = len(weights)
-    plt.figure(figsize=(8 * num_plots, 5))
+    plt.figure(figsize=(8 * num_plots, 4))
 
     for idx, (w, title) in enumerate(zip(weights, titles)):
         cmap = cmaps[idx] if isinstance(cmaps, list) else cmaps
@@ -144,7 +144,7 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_
     plt.tight_layout()
     save_plot(fname)
     plt.show()
-def plot_row_correlations(data_3d, fname,ref_index=0, use_bar_plot=False,font_size=14, tick_fontsize=14):
+def plot_row_correlations(ref_activity,data_2d, fname,ref_index=0, use_bar_plot=False,font_size=14, tick_fontsize=14):
     """
     Plots the correlation between the reference row and all other rows in the matrix.
     
@@ -153,25 +153,20 @@ def plot_row_correlations(data_3d, fname,ref_index=0, use_bar_plot=False,font_si
         reference_row_index (int): Index of the reference row to correlate with others.
         use_bar_plot (bool): If True, use a bar plot; else use a line plot.
     """
-    days, reps, neurons = data_3d.shape
-    mean_correlations = []
-    std_correlations = []
+    days, neurons = data_2d.shape
 
+    mean_correlations = []
+    
     for day in range(days):
-        rep_correlations = []
-        for rep in range(reps):
-            corr = np.corrcoef(data_3d[ref_index, rep], data_3d[day, rep])[0, 1]
-            rep_correlations.append(corr)
-        mean_correlations.append(np.mean(rep_correlations))
-        std_correlations.append(np.std(rep_correlations))
+        mean_correlations.append(np.corrcoef(ref_activity,data_2d[day]))
 
     # Plot
     fig,ax  = plt.subplots(figsize=(8, 4))
     if use_bar_plot:
         ax.bar(
             x=range(days),
-            height=mean_correlations,
-            yerr=std_correlations,
+            height = mean_correlations,
+            # yerr=std_correlations,
             capsize=5,
             color='blue',
             alpha=0.7,
@@ -181,7 +176,7 @@ def plot_row_correlations(data_3d, fname,ref_index=0, use_bar_plot=False,font_si
         plt.errorbar(
             x=range(days),
             y=mean_correlations,
-            yerr=std_correlations,
+            # yerr=std_correlations,
             fmt='-o',
             capsize=5,
             ecolor='gray',
@@ -239,3 +234,42 @@ def plot_consecutive_day_correlation(data_3d,fname):
     # plt.grid(True)
     save_plot(fname)
     plt.show()
+
+def plot_rowwise_com(matrix, num_days,fname, title=''):
+    """
+    Computes and plots the row-wise center of mass of a 2D matrix.
+    
+    Parameters:
+        matrix (2D array): Input matrix.
+        title (str): Plot title.
+    """
+    # matrix = np.asarray(matrix)
+    # rows = np.arange(matrix.shape[0])
+    
+    # # Compute column-wise center of mass
+    # col_sums = matrix.sum(axis=0)
+    # with np.errstate(divide='ignore', invalid='ignore'):
+    #     com = (matrix.T * rows).sum(axis=1) / col_sums
+    #     com = np.where(col_sums == 0, np.nan, com)  # Handle zero columns gracefully
+    
+    # # Plot
+    # plt.figure(figsize=(6, 4))
+    # days_to_plot = np.arange(off_set, matrix.shape[1], time_in_a_day)
+    # com_oi = [com[d] for d in days_to_plot]
+    com_means,com_std = center_of_mass_columnwise_blocked(matrix)
+    x = [i for i in range(num_days)]
+    xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
+    # breakpoint()
+    plt.errorbar(x,com_means,com_std, marker = 'o',color = 'k', label='Center of Mass')
+    plt.xticks(ticks=x, labels=xlabs, rotation=45)
+    plt.xlabel('Time (days)')
+    plt.ylabel('Center of mass of the output weights (# neuron)')
+    plt.title(title)
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    save_plot(fname)
+    plt.show()
+
+
+
