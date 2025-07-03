@@ -56,9 +56,10 @@ def before_after_weights(initial_weights, final_weights,title1,title2,fname,cmap
 
 
 
-def plot_activity(activity, title,var_name, fname,c):
+def plot_activity(activity, title,var_name, fname,c, th = 10):
     plt.figure(figsize=(10, 5))
-    plt.plot(activity,color=c)
+    plt.plot(activity, color=c)
+    plt.axhline(y=th, color='black', linestyle='--', linewidth=1)  # Dashed line at y = th
     plt.title(title)
     plt.xlabel('Time (s)')
     plt.ylabel(var_name)
@@ -144,7 +145,7 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_
     plt.tight_layout()
     save_plot(fname)
     plt.show()
-def plot_row_correlations(ref_activity,data_2d, fname,ref_index=0, use_bar_plot=False,font_size=14, tick_fontsize=14):
+def plot_row_correlations(ref_activity,data_2d,xlabs, fname, use_bar_plot=False,font_size=14, tick_fontsize=14):
     """
     Plots the correlation between the reference row and all other rows in the matrix.
     
@@ -156,9 +157,9 @@ def plot_row_correlations(ref_activity,data_2d, fname,ref_index=0, use_bar_plot=
     days, neurons = data_2d.shape
 
     mean_correlations = []
-    
+    # breakpoint()
     for day in range(days):
-        mean_correlations.append(np.corrcoef(ref_activity,data_2d[day]))
+        mean_correlations.append(np.corrcoef(ref_activity,data_2d[day])[0,1])
 
     # Plot
     fig,ax  = plt.subplots(figsize=(8, 4))
@@ -186,7 +187,7 @@ def plot_row_correlations(ref_activity,data_2d, fname,ref_index=0, use_bar_plot=
     # plt.title("Neuron Correlation with Day 0 Over Days")
     plt.xlabel("Elapsed time (days)",fontsize =font_size)
     plt.ylabel("Ensemble activity corr.",fontsize =font_size)
-    plt.xticks(range(days))
+    plt.xticks(ticks=range(days), labels=xlabs)
     ax.tick_params(labelsize=tick_fontsize)
 
     # plt.ylim(-1, 1)
@@ -194,25 +195,19 @@ def plot_row_correlations(ref_activity,data_2d, fname,ref_index=0, use_bar_plot=
     save_plot(fname)
     plt.show()
 
-def plot_consecutive_day_correlation(data_3d,fname):
+def plot_consecutive_day_correlation(data_2d,fname):
     """
     Plots average neuron correlation (with std) between consecutive days, repetition-wise.
 
     Parameters:
         data_3d (np.ndarray): 3D array of shape (days, repetitions, neurons)
     """
-    days, reps, neurons = data_3d.shape
+    days, neurons = data_2d.shape
     mean_corrs = []
-    std_corrs = []
     day_labels = []
 
     for day in range(1, days):
-        rep_corrs = []
-        for rep in range(reps):
-            corr = np.corrcoef(data_3d[day - 1, rep], data_3d[day, rep])[0, 1]
-            rep_corrs.append(corr)
-        mean_corrs.append(np.mean(rep_corrs))
-        std_corrs.append(np.std(rep_corrs))
+        mean_corrs.append( np.corrcoef(data_2d[day - 1], data_2d[day])[0, 1])
         day_labels.append(f"{day-1}-{day}")
 
     # Plot with error bars
@@ -220,7 +215,7 @@ def plot_consecutive_day_correlation(data_3d,fname):
     plt.errorbar(
         x=range(1, days),
         y=mean_corrs,
-        yerr=std_corrs,
+        # yerr=std_corrs,
         fmt='-o',
         capsize=5,
         ecolor='gray',
@@ -235,7 +230,7 @@ def plot_consecutive_day_correlation(data_3d,fname):
     save_plot(fname)
     plt.show()
 
-def plot_rowwise_com(matrix, num_days,fname, title=''):
+def plot_rowwise_com(matrix, num_days,fname,title=''):
     """
     Computes and plots the row-wise center of mass of a 2D matrix.
     
@@ -258,7 +253,7 @@ def plot_rowwise_com(matrix, num_days,fname, title=''):
     # com_oi = [com[d] for d in days_to_plot]
     com_means,com_std = center_of_mass_columnwise_blocked(matrix)
     x = [i for i in range(num_days)]
-    xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
+    xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
     # breakpoint()
     plt.errorbar(x,com_means,com_std, marker = 'o',color = 'k', label='Center of Mass')
     plt.xticks(ticks=x, labels=xlabs, rotation=45)

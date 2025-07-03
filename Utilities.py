@@ -73,3 +73,38 @@ def ensamble_overlap(enco_ens, off_ens):
     unique_enco_ens = set(np.unique(enco_ens))
     
     return np.array([len(set(row) & unique_enco_ens) for row in off_ens])
+
+
+def remove_top_percent_columns(matrix, percent):
+    """
+    Remove the columns corresponding to the top `percent` of values
+    in the first row of the matrix.
+
+    Parameters:
+        matrix (2D array-like): Input matrix.
+        percent (float): Percentage of top columns to remove (0–100).
+
+    Returns:
+        filtered_matrix (ndarray): Matrix with selected columns removed.
+        removed_indices (ndarray): Indices of the removed columns.
+    """
+    matrix = np.array(matrix)
+    n_cols = matrix.shape[1]
+    n_remove = max(1, int(np.ceil((percent / 100) * n_cols)))
+
+    # Get indices of top `percent` values in the first row
+    top_indices = np.argsort(matrix[0])[::-1][:n_remove]
+
+    # Remove those columns
+    result = np.delete(matrix, top_indices, axis=1)
+
+    return result, top_indices
+
+def remove_inactive_cells(matrix,theta):
+    matrix = np.array(matrix)
+    zero_activity_neurons = np.all(matrix < theta, axis=1)
+    
+    removed_indices = np.where(zero_activity_neurons)[0]
+    filtered_matrix = matrix[~zero_activity_neurons]
+    
+    return filtered_matrix, removed_indices
