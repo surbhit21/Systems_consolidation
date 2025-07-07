@@ -16,37 +16,12 @@ std::vector<std::mt19937> rng;
 
 // Populations
 PopStruct0 *pop0;
-PopStruct1 *pop1;
 
 
 // Projections
-ProjStruct0 *proj0;
-ProjStruct1 *proj1;
 
 
 // Global operations
-
-// Computes the L1-norm of an array
-double norm1_value(const double* array, int n)
-{
-    double sum = fabs(array[0]);
-    for(int i=1; i<n; i++)
-    {
-        sum += fabs(array[i]);
-    }
-    return sum;
-}
-
-// Computes the L2-norm (Euclidian) of an array
-double norm2_value(const double* array, int n)
-{
-    double sum = array[0] * array[0];
-    for(int i=1; i<n; i++)
-    {
-        sum += array[i] * array[i];
-    }
-    return sqrt(sum);
-}
 
 
 /*
@@ -106,19 +81,9 @@ void singleStep()
     ////////////////////////////////
 
 
-    // pop0: E_pop
-    if (pop0->_active)
-        std::fill(pop0->_sum_exc.begin(), pop0->_sum_exc.end(), static_cast<double>(0.0) );
-
-    // pop1: op_pop
-    if (pop1->_active)
-        std::fill(pop1->_sum_exc.begin(), pop1->_sum_exc.end(), static_cast<double>(0.0) );
-
 #ifdef _TRACE_SIMULATION_STEPS
     std::cout << "Update psp/conductances ..." << std::endl;
 #endif
-	proj0->compute_psp();
-	proj1->compute_psp();
 
 
 
@@ -151,7 +116,6 @@ void singleStep()
 #endif
 
 	pop0->update();
-	pop1->update();
 
 
 
@@ -170,7 +134,6 @@ void singleStep()
     std::cout << "Update global operations ..." << std::endl;
 #endif
 
-	pop0->update_global_ops();
 
 
 
@@ -181,8 +144,6 @@ void singleStep()
     std::cout << "Evaluate synaptic ODEs ..." << std::endl;
 #endif
 
-	proj0->update_synapse();
-	proj1->update_synapse();
 
 
 
@@ -275,13 +236,10 @@ void initialize(const double _dt) {
     // Populations
     // Initialize populations
     pop0->init_population();
-    pop1->init_population();
 
 
     // Projections
     // Initialize projections
-    proj0->init_projection();
-    proj1->init_projection();
 
 
     // Custom constants

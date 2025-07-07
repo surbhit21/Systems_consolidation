@@ -11,13 +11,11 @@
 extern double dt;
 extern long int t;
 extern std::vector<std::mt19937> rng;
-extern double norm1_value(const double*, int);
-extern double norm2_value(const double*, int);
 
 
 
 ///////////////////////////////////////////////////////////////
-// Main Structure for the population of id 0 (E_pop)
+// Main Structure for the population of id 0 (pop)
 ///////////////////////////////////////////////////////////////
 extern struct PopStruct0 *pop0;
 struct PopStruct0{
@@ -50,42 +48,14 @@ struct PopStruct0{
 
     // Neuron specific parameters and variables
 
-    // Global parameter tau
-    double  tau ;
-
-    // Local parameter input_i
-    std::vector< double > input_i;
-
-    // Global parameter I0
-    double  I0 ;
-
-    // Global parameter I1
-    double  I1 ;
-
-    // Global parameter I2
-    double  I2 ;
-
-    // Local parameter Epsi_i
-    std::vector< double > Epsi_i;
-
-    // Local variable x
-    std::vector< double > x;
+    // Global parameter Iext
+    double  Iext ;
 
     // Local variable r
     std::vector< double > r;
 
-    // Local variable ex
-    std::vector< double > ex;
-
-    // Local variable inp
-    std::vector< double > inp;
-
     // Local psp _sum_exc
     std::vector< double > _sum_exc;
-
-    // Global operations
-    double _norm1_x;
-    double _norm2_x;
 
     // Random numbers
 
@@ -103,39 +73,11 @@ struct PopStruct0{
     #endif
         _active = true;
 
-        // Global parameter tau
-        tau = 0.0;
-
-        // Local parameter input_i
-        input_i = std::vector<double>(size, 0.0);
-
-        // Global parameter I0
-        I0 = 0.0;
-
-        // Global parameter I1
-        I1 = 0.0;
-
-        // Global parameter I2
-        I2 = 0.0;
-
-        // Local parameter Epsi_i
-        Epsi_i = std::vector<double>(size, 0.0);
-
-        // Local variable x
-        x = std::vector<double>(size, 0.0);
+        // Global parameter Iext
+        Iext = 0.0;
 
         // Local variable r
         r = std::vector<double>(size, 0.0);
-
-        // Local variable ex
-        ex = std::vector<double>(size, 0.0);
-
-        // Local variable inp
-        inp = std::vector<double>(size, 0.0);
-
-        // Initialize global operations
-        _norm1_x = 0.0;
-        _norm2_x = 0.0;
 
         // Local psp _sum_exc
         _sum_exc = std::vector<double>(size, 0.0);
@@ -168,13 +110,6 @@ struct PopStruct0{
     std::cout << "    PopStruct0::update_global_ops()" << std::endl;
 #endif
 
-    if ( _active ){
-
-            _norm1_x = norm1_value(x.data(), size);
-
-            _norm2_x = norm2_value(x.data(), size);
-
-    }
     }
 
     // Method to enqueue output variables in case outgoing projections have non-zero delay
@@ -202,23 +137,11 @@ struct PopStruct0{
             #pragma omp simd
             for(int i = 0; i < size; i++){
 
-                // tau * dx/dt  + x = pos(input_i - I0 - I1 * norm1(x) - I2 * norm2(x) + Epsi_i + sum(exc))
-                double _x = (-x[i] + positive(Epsi_i[i] - I0 - I1*_norm1_x - I2*_norm2_x + _sum_exc[i] + input_i[i]))/tau;
+                // dr/dt +r = pos(sum(exc) + Iext)
+                double _r = -r[i] + positive(Iext + _sum_exc[i]);
 
-                // tau * dx/dt  + x = pos(input_i - I0 - I1 * norm1(x) - I2 * norm2(x) + Epsi_i + sum(exc))
-                x[i] += dt*_x ;
-
-
-                // r = if x < 1e-3: 0 else: x
-                r[i] = (x[i] < 0.001 ? 0 : x[i]);
-
-
-                // ex = Epsi_i
-                ex[i] = Epsi_i[i];
-
-
-                // inp = input_i
-                inp[i] = input_i[i];
+                // dr/dt +r = pos(sum(exc) + Iext)
+                r[i] += dt*_r ;
 
 
             }
@@ -236,17 +159,9 @@ struct PopStruct0{
     long int size_in_bytes() {
         long int size_in_bytes = 0;
         // Parameters
-        size_in_bytes += sizeof(double);	// tau
-        size_in_bytes += sizeof(std::vector<double>) + sizeof(double) * input_i.capacity();	// input_i
-        size_in_bytes += sizeof(double);	// I0
-        size_in_bytes += sizeof(double);	// I1
-        size_in_bytes += sizeof(double);	// I2
-        size_in_bytes += sizeof(std::vector<double>) + sizeof(double) * Epsi_i.capacity();	// Epsi_i
+        size_in_bytes += sizeof(double);	// Iext
         // Variables
-        size_in_bytes += sizeof(std::vector<double>) + sizeof(double) * x.capacity();	// x
         size_in_bytes += sizeof(std::vector<double>) + sizeof(double) * r.capacity();	// r
-        size_in_bytes += sizeof(std::vector<double>) + sizeof(double) * ex.capacity();	// ex
-        size_in_bytes += sizeof(std::vector<double>) + sizeof(double) * inp.capacity();	// inp
         // RNGs
 
         return size_in_bytes;
@@ -262,20 +177,10 @@ struct PopStruct0{
                 std::cout << "PopStruct0::clear()" << std::endl;
             #endif
         // Parameters
-        input_i.clear();
-        input_i.shrink_to_fit();
-        Epsi_i.clear();
-        Epsi_i.shrink_to_fit();
 
         // Variables
-        x.clear();
-        x.shrink_to_fit();
         r.clear();
         r.shrink_to_fit();
-        ex.clear();
-        ex.shrink_to_fit();
-        inp.clear();
-        inp.shrink_to_fit();
 
         // RNGs
 

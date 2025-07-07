@@ -374,6 +374,8 @@ _Python_INCLUDE_DIR:INTERNAL=/usr/local/opt/python@3.11/Frameworks/Python.framew
 //Python Properties
 _Python_INTERPRETER_PROPERTIES:INTERNAL=Python;3;11;2;64;<none>;cpython-311-darwin;abi3;/usr/local/opt/python@3.11/Frameworks/Python.framework/Versions/3.11/lib/python3.11;/Users/surbhitwagle/Desktop/Surbhit/Work/PhD/2020/PhD/MPIBR/Postdoc/Clopath_Lab/Systems_consolidation/.venv/lib/python3.11;/Users/surbhitwagle/Desktop/Surbhit/Work/PhD/2020/PhD/MPIBR/Postdoc/Clopath_Lab/Systems_consolidation/.venv/lib/python3.11/site-packages;/Users/surbhitwagle/Desktop/Surbhit/Work/PhD/2020/PhD/MPIBR/Postdoc/Clopath_Lab/Systems_consolidation/.venv/lib/python3.11/site-packages
 _Python_INTERPRETER_SIGNATURE:INTERNAL=e46ff914fb4c4f4e2a67677a0258bc32
+//Interpreter reason failure
+_Python_Interpreter_REASON_FAILURE:INTERNAL=
 //Path to a library.
 _Python_LIBRARY_RELEASE:INTERNAL=/usr/local/opt/python@3.11/Frameworks/Python.framework/Versions/3.11/lib/libpython3.11.dylib
 _Python_NUMPY_SIGNATURE:INTERNAL=8424157c9b750cd4f7961def15104737
