@@ -20,7 +20,7 @@ jobs:
 
     - name: Install Dependencies
       run: |
-        pip install -r app/requirement.txt
+        pip install -r requirement.txt
 
     - name: Run Tests
       run: |
