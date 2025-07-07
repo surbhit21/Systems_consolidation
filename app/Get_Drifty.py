@@ -89,8 +89,8 @@ ID = 1000 #inter-day delay
 T_recall = 200
 
 
-delta = 60 # input current
-delta_2 = 60
+delta = 40 # input current
+delta_2 = 40
 theta = 2 #threshold firing rate for active neurons
 c = 1 #cap pn recurrent weights
 noise_current = np.random.normal(0, 1, num_HPC_E_neuron)  # noise current
