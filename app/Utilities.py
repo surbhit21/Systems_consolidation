@@ -108,3 +108,17 @@ def remove_inactive_cells(matrix,theta):
     filtered_matrix = matrix[~zero_activity_neurons]
     
     return filtered_matrix, removed_indices
+
+def day_wise_avg_offline_activity(matrix, block_size=10):
+    matrix = np.array(matrix)
+    n_rep, n_neurons = matrix.shape
+
+    # Ensure the number of rows is divisible by block_size
+    if n_rep % block_size != 0:
+        raise ValueError(f"Number of rows ({n_rep}) must be divisible by block_size ({block_size}).")
+
+    # Reshape and compute mean across blocks of rows
+    reshaped = matrix.reshape(-1, block_size, n_neurons)  # shape: (num_blocks, block_size, cols)
+    block_means = reshaped.mean(axis=1)  # mean over rows in each block
+
+    return block_means
