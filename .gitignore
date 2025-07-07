@@ -196,7 +196,8 @@ cython_debug/
 
 # skipping annarchy builds for now
 annarchy
-build
+app/annarchy
+app/annarchy_builds
 # project related folders and file
 plots
 *.png

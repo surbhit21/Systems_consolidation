@@ -1,3 +1,4 @@
+import json
 import numpy as np
 
 def generate_random_pattern(length):
@@ -122,3 +123,11 @@ def day_wise_avg_offline_activity(matrix, block_size=10):
     block_means = reshaped.mean(axis=1)  # mean over rows in each block
 
     return block_means
+
+def save_params(params, json_output_path):
+    """
+    dumps top-level assignments as JSON.
+    """
+    # Dump to JSON
+    with open(json_output_path, 'w') as out:
+        json.dump(params, out, indent=4)

@@ -1,5 +1,0 @@
-[ 80%] Built target nanobind-static
-[ 86%] Building CXX object CMakeFiles/ANNarchyCore1.dir/ANNarchyCore1.cpp.o
-[ 93%] Building CXX object CMakeFiles/ANNarchyCore1.dir/ANNarchy.cpp.o
-[100%] Linking CXX shared module ANNarchyCore1.dylib
-[100%] Built target ANNarchyCore1

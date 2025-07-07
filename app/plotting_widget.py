@@ -268,3 +268,10 @@ def plot_rowwise_com(matrix, num_days,fname,title=''):
 
 
 
+def plot_pca(matrix):
+    plt.scatter(matrix[:, 0], matrix[:, 1])
+    plt.xlabel('PC 1')
+    plt.ylabel('PC 2')
+    plt.title('PCA projection')
+    plt.grid(True)
+    plt.show()
