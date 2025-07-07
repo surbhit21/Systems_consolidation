@@ -5,9 +5,9 @@ class TestANNarchySetup(unittest.TestCase):
     def setUp(self):
         # List of required files to check
         self.required_files = [
-            "./app/Get_Drifty.py",
-            "./app/Utilities.py",
-            "./app/plotting_widget.py"
+            "app/Get_Drifty.py",
+            "app/Utilities.py",
+            "app/plotting_widget.py"
         ]
 
     def test_required_files_exist(self):
