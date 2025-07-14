@@ -42,7 +42,7 @@ E_synapse = ann.Synapse(
         tau_w = 800,
         lr = 1,
         tau_decay = 1000,
-        max_weight = 0.4,
+        max_weight = 0.5,
         min_weight = 0.0,
         freeze = ann.Parameter(False, locality="semiglobal",type=bool)  # freeze parameter to control weight updates
     ),
@@ -73,10 +73,10 @@ num_HPC_E_neuron = 70
 mu = 0
 sigma = 1
 orig_exitability = np.abs(np.random.uniform(mu, sigma, num_HPC_E_neuron))
-E = 2 # Epsi_i increase factor for neurons
+E = 1.5 # Epsi_i increase factor for neurons
 
 # encoding time duration
-T_encode = 500
+T_encode = 200
 
 
 # Offline simulation parameters
@@ -90,16 +90,17 @@ ID = 1000 #inter-day delay
 T_recall = 200
 
 
-delta = 60 # input current
-delta_2 = 70
-theta = 2 #threshold firing rate for active neurons
+delta = 45 # input current
+delta_2 = 45
+theta = 1 #threshold firing rate for active neurons
 c = 1 #cap pn recurrent weights
 I_noise_mu, I_noise_sigma = 0, 1 # mean and standard deviation for noise current
 
 noise_current = np.random.normal(I_noise_mu, I_noise_sigma, num_HPC_E_neuron)  # noise current
+zero_current = np.zeros(num_HPC_E_neuron)  # zero current for neurons
 del_t = 1 # time step
 
-Freeze_plast = True
+Freeze_plast = False
 net = ann.Network()
 E_pop = net.create(geometry=num_HPC_E_neuron, neuron=LIneuron, name='E_pop')
 EE_proj = net.connect(E_pop,E_pop,'exc',E_synapse)
@@ -114,7 +115,7 @@ net.compile(clean=True)
 # breakpoint()
 Eop_proj.lr = 0.1
 Eop_proj.tau_decay = 1000
-Eop_proj.tau_w = 400
+Eop_proj.tau_w = 800
 # Eop_proj.max_weight = 1
 # Eop_proj.min_weight = -1
 
@@ -148,7 +149,7 @@ weights.append(EE_proj.connectivity_matrix())
 op_weights.append(Eop_proj.connectivity_matrix())
 # breakpoint()
 # EE_proj[:10].freeze = True  # freeze weights for first 10 neurons
-E_pop[:].input_i = noise_current
+E_pop[:].input_i = zero_current#noise_current
 # EE_proj.freeze = True  
 net.simulate(ID)
 
@@ -165,7 +166,7 @@ for day in range(1,num_days+1):
         # stim_phase 
         # input is set for all neurons in the population
         E_pop[:].input_i = np.array([delta_2]*num_HPC_E_neuron)
-        # EE_proj.freeze = False
+        EE_proj.freeze = False
         # exitability is drawn from a uniform distri
         # now based on day the exicitability is increased by a factor of E for some neurons
         # if day == 1:
@@ -187,8 +188,8 @@ for day in range(1,num_days+1):
         # print(E_pop[1].r)
         # post-stim (pause) phase 
         # input is set to 0 for all neurons in the population
-        E_pop[:].input_i =noise_current
-        # EE_proj.freeze = True  # freeze weights during offline, rem phase
+        E_pop[:].input_i = zero_current#noise_current
+        EE_proj.freeze = Freeze_plast  # freeze weights during offline, rem phase
         # Epsi_i remains elevated for the same neurons
         net.simulate(IR)
         # for i in range(0,IR):
@@ -225,8 +226,8 @@ activity_vector.append(E_pop.r)
 weights.append(EE_proj.connectivity_matrix())
 op_weights.append(Eop_proj.connectivity_matrix())
 
-E_pop[:].input_i = noise_current
-EE_proj.freeze = True
+E_pop[:].input_i = zero_current#noise_current
+EE_proj.freeze = Freeze_plast
 net.simulate(ID)
 
 
@@ -275,7 +276,6 @@ params = {
     "I_name": I_name,
     "del_t": del_t,
 }
-save_params(params, json_output_path="./plots/E_{0}_{1}/params.json".format(E_name,I_name))
 # all plots are generated here
 plot_activity_n_excitability_time([rs,exs,inps],
                        titles=['Neuronal Activity',
@@ -297,26 +297,37 @@ plot_weights_over_time(weights,
 # #                        fname="./plots/E_{0}_{1}/delamare_2024_F3C.png".format(E_name,I_name),
 # #                        cmaps='gray_r')
 # correlation_plot
+save_params(params, json_output_path="./plots/E_{0}_{1}/params.json".format(E_name,I_name))
 activity_vector = np.array(activity_vector)
 average_off_activity = day_wise_avg_offline_activity(activity_vector[1:-1], block_size=Nrep)
 avg_activity = np.vstack((np.vstack((activity_vector[0],average_off_activity)),activity_vector[-1]))
 active_neurons,act_neuron_index = remove_inactive_cells(avg_activity.T,theta)
 active_neurons = active_neurons
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
-breakpoint()
-plot_row_correlations(avg_activity[0],avg_activity[1:], xlabs=xlabs,fname="./plots/E_{0}_{1}/encoding_corr.png".format(E_name,I_name), use_bar_plot=True)
+Title = "Ensamble similarity of encoding and offline + recall"
+plot_row_correlations(avg_activity[0],avg_activity[1:], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/encoding_corr.png".format(E_name,I_name), use_bar_plot=True)
+xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5"]
+Title = "Ensamble similarity of encoding and offline"
+plot_row_correlations(avg_activity[0],avg_activity[1:-1], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/encoding_corr_no_recall.png".format(E_name,I_name), use_bar_plot=True)
 xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
-plot_row_correlations(avg_activity[-1],avg_activity[:-1], xlabs=xlabs,fname="./plots/E_{0}_{1}}/Recall_corr.png".format(E_name,I_name), use_bar_plot=True)
+Title = "Ensamble similarity of recall and offline + encoding"
+plot_row_correlations(avg_activity[-1],avg_activity[:-1], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/Recall_corr.png".format(E_name,I_name), use_bar_plot=True)
+xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5"]
+Title = "Ensamble similarity of recall and offline"
+
+plot_row_correlations(avg_activity[-1],avg_activity[1:-1], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/Recall_corr_no_encode.png".format(E_name,I_name), use_bar_plot=True)
+
 plot_consecutive_day_correlation(avg_activity, fname="./plots/E_{0}_{1}/dayN_N_1_corr.png".format(E_name,I_name))
 removed_x_data,removed_neurons = remove_top_percent_columns(activity_vector, 10)
 en_recall_overlap = ensamble_overlap(encoding_ensamble, [recall_ensamble])
-en_off_overlap = ensamble_overlap(encoding_ensamble, offline_ensamble)
-re_off_overlap = ensamble_overlap(recall_ensamble, offline_ensamble)
+en_off_overlap = ensamble_overlap(encoding_ensamble, offline_ensamble).reshape(num_days,Nrep)
+re_off_overlap = ensamble_overlap(recall_ensamble, offline_ensamble).reshape(num_days,Nrep)
+breakpoint()
 
 # breakpoint()
 # plot_row_correlations(removed_x_data[-1],removed_x_data[:-1], xlabs=xlabs,fname="./plots/E_{0}_{1}/Recall_corr_10.png".format(E_name,I_name), use_bar_plot=True)
-print("Ensemble overlap between encoding and recall: ", en_recall_overlap/encoding_ensamble.shape[0])
-print("Ensemble overlap between encoding and offline: ", en_off_overlap/encoding_ensamble.shape[0])
-print("Ensemble overlap between recall and offline: ", re_off_overlap/recall_ensamble.shape[0])
+print("Ensemble overlap between encoding and recall: \n", en_recall_overlap/encoding_ensamble.shape[0])
+print("Ensemble overlap between encoding and offline: \n", en_off_overlap/encoding_ensamble.shape[0])
+print("Ensemble overlap between recall and offline: \n", re_off_overlap/recall_ensamble.shape[0])
 # plot_rowwise_com(op_weights.T,num_days,fname="./plots/E_{0}_{1}/delamare_2024_F3D.png".format(E_name,I_name))
 

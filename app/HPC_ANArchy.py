@@ -2,7 +2,7 @@ import ANNarchy as ann
 import matplotlib.pyplot as plt
 import numpy as np
 # import os
-from plotting_widget import plot_weights_over_time,plot_activity_n_excitability_time
+from plotting_widget import *
 from Utilities import generate_random_pattern
 HPC_LIneuron = ann.Neuron(
     parameters = dict(
@@ -35,7 +35,7 @@ I_synapse = ann.Synapse(
     parameters = dict(
         tau = 1,
         lr_i = 0.004,
-        target_rate = ann.Parameter(0.5),
+        target_rate = ann.Parameter(0.4),
         max_w = 1e+9,
         min_w = -1e+9
     ),
@@ -153,12 +153,14 @@ PATTERN_A = np.concat((generate_random_pattern(PAT_LEN),np.zeros(num_HPC_E_neuro
 
 # encoding phase
 HPC_E_pop[:].I_ext =  PATTERN_A# Set external input for first 10 neurons
-HPC_I_pop[:].I_ext = 0.5 * PATTERN_A
-CTX_E_pop[:].I_ext = PATTERN_A
-CTX_I_pop[:].I_ext =0.5 * PATTERN_A
+HPC_I_pop[:].I_ext =  PATTERN_A
+CTX_E_pop[:].I_ext =  PATTERN_A
+CTX_I_pop[:].I_ext =  PATTERN_A
 
-Can_network.config(dt=0.1)
-Can_network.simulate(100)
+T_encode = 100
+dt = 0.1
+Can_network.config(dt=dt)
+Can_network.simulate(T_encode)
 
 # for i in range(7):
 #     HPC_E_pop[:].I_ext =  HPC_I_pop[:].I_ext = CTX_E_pop[:].I_ext = CTX_I_pop[:].I_ext = np.zeros(num_CTX_E_neuron)
@@ -181,7 +183,27 @@ CTX_II_W.append(CTX_II_proj.connectivity_matrix())
 CTX_HPC_I_w.append(CTX_HPC_I_proj.connectivity_matrix())
 HPC_CTX_E_w.append(HPC_CTX_E_proj.connectivity_matrix())
 
+# no_input_time = 10
+# no_input = np.zeros(num_HPC_E_neuron)
 
+# HPC_E_pop[:].I_ext =  no_input# Set external input for first
+# HPC_I_pop[:].I_ext =  no_input
+# CTX_E_pop[:].I_ext =  no_input
+# CTX_I_pop[:].I_ext =  no_input
+# Can_network.simulate(no_input_time)
+
+# Recall Phase
+T_recall = 20
+partial_pattern = np.zeros(num_HPC_E_neuron)
+per = 0.8
+PAT_LEN = 10
+partial_pattern[:int(PAT_LEN*per)] = PATTERN_A[:int(PAT_LEN*per)]
+HPC_E_pop[:].I_ext =  partial_pattern# Set external input for first
+HPC_I_pop[:].I_ext =  partial_pattern
+CTX_E_pop[:].I_ext =  partial_pattern
+CTX_I_pop[:].I_ext =  partial_pattern
+
+Can_network.simulate(T_recall)
 
 
 
@@ -195,15 +217,25 @@ HPC_i_Act = HPC_I_act_monitor.get('r')
 CTX_e_Act = CTX_E_act_monitor.get('r')
 CTX_i_Act = CTX_I_act_monitor.get('r')
 
+encoding_HPC_activity = HPC_e_Act[:int(T_encode//dt),:]
+recall_HPC_activity = HPC_e_Act[-int(T_recall//dt):,:]
+
+encoding_ctx_activity = CTX_e_Act[:int(T_encode//dt),:]
+recall_ctx_activity = CTX_e_Act[-int(T_recall//dt):,:]
+
 plot_activity_n_excitability_time([HPC_e_Act.T,CTX_e_Act.T],["HPC E F.R.","CTX E F.R."],fname="./plots/Sys_cons/E_activities.png",cmaps=['Blues', 'Greens'])
 plot_activity_n_excitability_time([HPC_i_Act.T,CTX_i_Act.T],["HPC I F.R.","CTX E I.R."],fname="./plots/Sys_cons/I_activities.png",cmaps=['Blues', 'Greens'])
 
-# plot_activity(hpc_e_Act,"","HPC netowrk excitatory neuron activity", "./plots/HPC_E_activity.png",c='red')
-# plot_activity(hpc_i_Act,"","HPC netowrk inhibitory neuron activity", "./plots/HPC_E_activity.png",c='blue')
+breakpoint()
+plot_avg_activity([encoding_HPC_activity.T,encoding_ctx_activity.T,recall_HPC_activity.T,recall_ctx_activity.T],["HPC E F.R.","CTX E F.R."],fname="./plots/Sys_cons/Encode_activities.png",cmaps=['red', 'red', 'blue', 'blue'])
+# plot_avg_activity([recall_HPC_activity.T,recall_ctx_activity.T],["HPC E F.R.","CTX E F.R."],fname="./plots/Sys_cons/recall_activities.png",cmaps=['gray', 'gray'])
 
-plot_weights_over_time([HPC_EE_W[0], CTX_EE_W[0]],[ "HPC W_{EE}" ,"CTX W_{EE}"] ,"./plots/Sys_cons/EE_weights.png")
-plot_weights_over_time([HPC_EI_W[0], CTX_EI_W[0]], ["HPC W_{EI}" ,"CTX W_{EI}" ],"./plots/Sys_cons/EI_weights.png")
-plot_weights_over_time([HPC_IE_W[0], CTX_IE_W[0]], ["HPC W_{IE}" ,"CTX W_{IE}"] ,"./plots/Sys_cons/IE_weights.png")
-plot_weights_over_time([HPC_II_W[0], CTX_II_W[0]], ["HPC W_{II}" ,"CTX W_{II}"] ,"./plots/Sys_cons/II_weights.png")
+# # plot_activity(hpc_e_Act,"","HPC netowrk excitatory neuron activity", "./plots/HPC_E_activity.png",c='red')
+# # plot_activity(hpc_i_Act,"","HPC netowrk inhibitory neuron activity", "./plots/HPC_E_activity.png",c='blue')
 
-plot_weights_over_time([CTX_HPC_I_w[0], HPC_CTX_E_w[0]], ["CTX => HPC: w" ,"HPC => CTX: w"] ,"./plots/Sys_cons/cross_connections.png")
+# plot_weights_over_time([HPC_EE_W[0], CTX_EE_W[0]],[ "HPC W_{EE}" ,"CTX W_{EE}"] ,"./plots/Sys_cons/EE_weights.png")
+# plot_weights_over_time([HPC_EI_W[0], CTX_EI_W[0]], ["HPC W_{EI}" ,"CTX W_{EI}" ],"./plots/Sys_cons/EI_weights.png")
+# plot_weights_over_time([HPC_IE_W[0], CTX_IE_W[0]], ["HPC W_{IE}" ,"CTX W_{IE}"] ,"./plots/Sys_cons/IE_weights.png")
+# plot_weights_over_time([HPC_II_W[0], CTX_II_W[0]], ["HPC W_{II}" ,"CTX W_{II}"] ,"./plots/Sys_cons/II_weights.png")
+
+# plot_weights_over_time([CTX_HPC_I_w[0], HPC_CTX_E_w[0]], ["CTX => HPC: w" ,"HPC => CTX: w"] ,"./plots/Sys_cons/cross_connections.png")

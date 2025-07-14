@@ -2,7 +2,7 @@ import json
 import numpy as np
 
 def generate_random_pattern(length):
-    return np.array([1,-1,1,-1,1,-1,1,-1,1,-1])#np.random.choice([1, -1], size=length)
+    return np.random.choice([1, -1], size=length)
 
 def center_of_mass_rowwise(matrix):
     matrix = np.asarray(matrix)
@@ -129,5 +129,6 @@ def save_params(params, json_output_path):
     dumps top-level assignments as JSON.
     """
     # Dump to JSON
-    with open(json_output_path, 'w') as out:
+    with open(json_output_path, 'w+') as out:
         json.dump(params, out, indent=4)
+    print("Parameters saved to: ", json_output_path)

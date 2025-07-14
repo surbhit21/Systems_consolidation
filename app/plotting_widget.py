@@ -145,7 +145,7 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_
     plt.tight_layout()
     save_plot(fname)
     plt.show()
-def plot_row_correlations(ref_activity,data_2d,xlabs, fname, use_bar_plot=False,font_size=14, tick_fontsize=14):
+def plot_row_correlations(ref_activity,data_2d,xlabs, title, fname, use_bar_plot=False,font_size=14, tick_fontsize=14):
     """
     Plots the correlation between the reference row and all other rows in the matrix.
     
@@ -184,7 +184,7 @@ def plot_row_correlations(ref_activity,data_2d,xlabs, fname, use_bar_plot=False,
             color='blue'
         )
     ax.spines[["right", "top"]].set_visible(False)
-    # plt.title("Neuron Correlation with Day 0 Over Days")
+    plt.title(title)
     plt.xlabel("Elapsed time (days)",fontsize =font_size)
     plt.ylabel("Ensemble activity corr.",fontsize =font_size)
     plt.xticks(ticks=range(days), labels=xlabs)
@@ -274,4 +274,18 @@ def plot_pca(matrix):
     plt.ylabel('PC 2')
     plt.title('PCA projection')
     plt.grid(True)
+    plt.show()
+
+def plot_avg_activity(activities, titles, fname, cmaps='gray', title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
+    # breakpoint()
+    num_plots = int(len(activities) // 2)
+    fig,ax = plt.subplots(figsize=(5 * num_plots, 5),ncols =num_plots)
+    # ax =ax.split(sharey=True)
+    for i in range(num_plots):
+        avg_activity = np.mean(activities[i], axis=1)
+        # ax[i].plot(avg_activites[i], color=cmaps[i] if isinstance(cmaps, list) else cmaps)
+        ax[i % 2].step(range(len(avg_activity)), avg_activity, where='post', linewidth=i // 2 + 1,color=cmaps[i] if isinstance(cmaps, list) else cmaps)
+        # print(avg_activity)
+    plt.tight_layout()
+    save_plot(fname)
     plt.show()
