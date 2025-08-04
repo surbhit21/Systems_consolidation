@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 from Utilities import center_of_mass_rowwise, center_of_mass_columnwise_blocked
-
+from sklearn.decomposition import PCA
 # import seaborn as sns
 
 def ensure_dir_exists(file_path):
@@ -268,12 +268,46 @@ def plot_rowwise_com(matrix, num_days,fname,title=''):
 
 
 
-def plot_pca(matrix):
-    plt.scatter(matrix[:, 0], matrix[:, 1])
+# def plot_pca(matrix,lables=None, title='PCA Projection', fname='pca_plot.png', cmap='viridis'):
+#     if lables is not None:
+#         scatter = plt.scatter(matrix[:, 0], matrix[:, 1], c=lables, cmap=cmap, s=40)
+#         plt.legend(*scatter.legend_elements(), title="Label", bbox_to_anchor=(1.05, 1), loc='upper left')
+#     else:
+#         plt.scatter(matrix[:, 0], matrix[:, 1], c=np.arange(matrix.shape[0]), cmap=cmap, s=40)
+#         plt.colorbar(label='Column Index')
+#     plt.xlabel('PC 1')
+#     plt.ylabel('PC 2')
+#     plt.title('PCA projection')
+#     plt.grid(True)
+#     plt.show()
+    
+def plot_pca_2d(X, labels=None, cmap='tab10', title='PCA projection'):
+    """
+    Plots the first two principal components of the columns of X.
+
+    Args:
+        X: 2D numpy array of shape (n_features, n_samples)
+        labels: List or array of labels (length = n_samples) for color coding
+        cmap: Matplotlib colormap
+        title: Title of the plot
+    """
+    X = X.T  # Each column is a sample → transpose to shape (n_samples, n_features)
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X)
+
+    plt.figure(figsize=(6, 5))
+
+    if labels is not None:
+        scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=labels, cmap=cmap, s=40)
+        plt.legend(*scatter.legend_elements(), title="Label", bbox_to_anchor=(1.05, 1), loc='upper left')
+    else:
+        plt.scatter(X_pca[:, 0], X_pca[:, 1], c=np.arange(X.shape[0]), cmap=cmap, s=40)
+        plt.colorbar(label='Column Index')
+
     plt.xlabel('PC 1')
     plt.ylabel('PC 2')
-    plt.title('PCA projection')
-    plt.grid(True)
+    plt.title(title)
+    plt.tight_layout()
     plt.show()
 
 def plot_avg_activity(activities, titles, fname, cmaps='gray', title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):

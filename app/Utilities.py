@@ -132,3 +132,26 @@ def save_params(params, json_output_path):
     with open(json_output_path, 'w+') as out:
         json.dump(params, out, indent=4)
     print("Parameters saved to: ", json_output_path)
+
+def top_percent_indices(arr, percent):
+    """
+    Returns the indices of the top `percent`% largest elements in the array.
+    
+    Parameters:
+        arr (array-like): Input array.
+        percent (float): Percentage (0–100) of top elements to select.
+    
+    Returns:
+        np.ndarray: Indices of top elements in descending order of value.
+    """
+    arr = np.asarray(arr)
+    n = len(arr)
+    
+    if percent <= 0 or percent > 100:
+        raise ValueError("percent must be in the range (0, 100]")
+
+    n_top = max(1, int(np.ceil((percent / 100) * n)))  # at least 1 element
+    sorted_indices = np.argsort(arr)[::-1]  # descending order
+    top_indices = sorted_indices[:n_top]
+    
+    return top_indices
