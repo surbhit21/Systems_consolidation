@@ -149,7 +149,7 @@ CTX_I_act_monitor = Can_network.monitor(HPC_I_pop,'r')
 # setting up monitors to record the firing rates
 PAT_LEN = 10
 np.random.seed(1)
-PATTERN_A = np.concat((generate_random_pattern(PAT_LEN),np.zeros(num_HPC_E_neuron-PAT_LEN)))
+PATTERN_A = np.concatenate((generate_random_pattern(PAT_LEN),np.zeros(num_HPC_E_neuron-PAT_LEN)))
 
 # encoding phase
 HPC_E_pop[:].I_ext =  PATTERN_A# Set external input for first 10 neurons
