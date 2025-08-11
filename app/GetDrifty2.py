@@ -69,15 +69,15 @@ class twolayermodel:
     def get_excitability(self):
         return self.exc.detach().clone()
 
-n = 100
-ni = 100
+n = 10
+ni = 10
 act_threshold = 1
 nn = twolayermodel(ni,n,tau=50.0,dt = 1.0,lr = 0.05,threshold=0.4)
 timesteps = 200
 input = torch.abs(torch.normal(mean=0.0, std=1.0, size=(n,)))
 
 FC_input = input
-FC_input[:10] += 2
+FC_input[:2] += 2
 
 nonFC_input = input
 nonFC_input[10:] += 1
@@ -118,7 +118,7 @@ for i in range(Nrep):
         FR_history.append(next_FR.numpy()*frs)
         EX_history.append(nn.get_excitability().numpy())
     input_at_t = np.tile(Input_to_network, (t_off, 1))
-    breakpoint()
+    # breakpoint()
     input_history = np.concatenate((input_history,input_at_t))
     # input_history = np.concatenate([input_history, input_at_t[np.newaxis, :]], axis=0)
 
@@ -127,7 +127,7 @@ ff_weights.append(nn.input_w.detach().clone().numpy())
 
 FR_history = np.stack(FR_history)
 EX_history = np.stack(EX_history)
-
+breakpoint()
 
 plot_activity_n_excitability_time([FR_history.T,EX_history.T,input_history],
                        titles=['Neuronal Activity',

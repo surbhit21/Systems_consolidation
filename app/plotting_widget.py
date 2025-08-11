@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
 from Utilities import center_of_mass_rowwise, center_of_mass_columnwise_blocked
+import seaborn as sns
 from sklearn.decomposition import PCA
 # import seaborn as sns
 
@@ -94,6 +95,7 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
         fname: Filename to save the complete figure.
         cmaps: List of colormaps (or a single colormap) for the subplots.
     """
+    breakpoint()
     num_plots = len(weights)
     fig = plt.figure(figsize=(5 * num_plots, 5))
     gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
@@ -192,6 +194,29 @@ def plot_row_correlations(ref_activity,data_2d,xlabs, title, fname, use_bar_plot
 
     # plt.ylim(-1, 1)
     plt.tight_layout()
+    save_plot(fname)
+    plt.show()
+
+def plot_corr_matrix(data,fname):
+    """
+    Plots the correlation matrix of the input data.
+    
+    Parameters:
+        data (np.ndarray): 2D array with shape (rows, columns).
+        fname (str): Filename to save the plot.
+    """
+    corr_matrix = np.corrcoef(data)  # Transpose to get correlations between columns
+    print(corr_matrix)
+    plt.figure(figsize=(6, 5))
+    # Mask the diagonal (set it to NaN so it won't be colored)
+    mask = np.eye(corr_matrix.shape[0], dtype=bool)
+    min_v,max_v = np.min(corr_matrix), np.max(corr_matrix)
+    sns.heatmap(corr_matrix, annot=False, cmap="viridis", vmin=min_v, vmax=max_v, square=True, mask=mask, cbar=True)
+
+    # plt.colorbar(label='Correlation Coefficient')
+    plt.title('Correlation Matrix')
+    plt.xlabel('Neurons')
+    plt.ylabel('Neurons')
     save_plot(fname)
     plt.show()
 

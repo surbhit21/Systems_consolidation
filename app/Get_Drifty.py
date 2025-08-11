@@ -320,6 +320,8 @@ average_off_activity = day_wise_avg_offline_activity(activity_vector[1:-1], bloc
 avg_activity = np.vstack((np.vstack((activity_vector[0],average_off_activity)),activity_vector[-1]))
 active_neurons,act_neuron_index = remove_inactive_cells(avg_activity.T,theta)
 active_neurons = active_neurons
+breakpoint()
+plot_corr_matrix(avg_activity, fname="./plots/E_{0}_{1}/corr_matrix.png".format(E_name,I_name))
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
 Title = "Ensemble similarity of encoding and offline + recall"
 plot_row_correlations(avg_activity[0],avg_activity[1:], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/encoding_corr.png".format(E_name,I_name), use_bar_plot=True)
@@ -346,6 +348,6 @@ print("Ensemble overlap between encoding and recall: \n", en_recall_overlap/enco
 print("Ensemble overlap between encoding and offline: \n", en_off_overlap.mean(axis=1)/encoding_ensamble.shape[0])
 print("Ensemble overlap between recall and offline: \n", re_off_overlap.mean(axis=1)/ recall_ensamble.shape[0])
 plot_pca_2d(avg_activity.T)
-breakpoint()
+# breakpoint()
 # plot_rowwise_com(op_weights.T,num_days,fname="./plots/E_{0}_{1}/delamare_2024_F3D.png".format(E_name,I_name))
 
