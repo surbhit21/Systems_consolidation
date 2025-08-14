@@ -215,8 +215,8 @@ def plot_corr_matrix(data,fname):
 
     # plt.colorbar(label='Correlation Coefficient')
     plt.title('Correlation Matrix')
-    plt.xlabel('Neurons')
-    plt.ylabel('Neurons')
+    plt.xlabel('Days')
+    plt.ylabel('Days')
     save_plot(fname)
     plt.show()
 

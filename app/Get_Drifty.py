@@ -348,6 +348,6 @@ print("Ensemble overlap between encoding and recall: \n", en_recall_overlap/enco
 print("Ensemble overlap between encoding and offline: \n", en_off_overlap.mean(axis=1)/encoding_ensamble.shape[0])
 print("Ensemble overlap between recall and offline: \n", re_off_overlap.mean(axis=1)/ recall_ensamble.shape[0])
 plot_pca_2d(avg_activity.T)
-# breakpoint()
+breakpoint()
 # plot_rowwise_com(op_weights.T,num_days,fname="./plots/E_{0}_{1}/delamare_2024_F3D.png".format(E_name,I_name))
 
