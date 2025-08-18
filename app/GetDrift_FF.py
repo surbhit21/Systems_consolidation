@@ -10,7 +10,7 @@ class twolayer_FF:
         self.n_neurons = n_neurons
         self.tau = tau  # rate constant 
         self.dt = dt  # discretization step
-        self.exc = torch.abs(torch.rand(n_neurons))  # excitability 
+        # self.exc = torch.abs(torch.rand(n_neurons))  # excitability 
         self.act = act  # activation function
         self.lr = lr  # learning rate for synaptic weights
         self.decay_r = decay_r  # decay rate for synaptic weights
@@ -39,7 +39,7 @@ class twolayer_FF:
         I_inhib = self.I0 + self.I1 * torch.sum(self.rates) + self.I2 + torch.sum(self.rates**2)
 
         # total input to the RNN
-        input_current =  input_vector + self.exc - I_inhib + self.excitability
+        input_current =  input_vector + self.excitability - I_inhib 
 
         # rate change as the nonlinear ODE
         dr_dt = (-self.rates +  self.act(input_current)) / self.tau
@@ -58,6 +58,7 @@ class twolayer_FF:
         self.input_w = torch.clamp(self.input_w, 0.0, 1.0)  # Ensure weights are non-negative
         return self.rates.detach().clone()
 
+torch.manual_seed(2025)
 n = 140
 e = 3.5
 n_drifti ,ni_FC = 40,10 #(40 drify and 10 contextual neurons)
@@ -70,7 +71,7 @@ t_FC = 200
 input = torch.abs(torch.normal(mean=0.0, std=1.0, size=(ni,)))
 FC_input = input.clone()
 FC_input[n_drifti:] += 10
-nn.exc[:20] += e
+nn.excitability[:20] += e
 nonFC_input = input
 nonFC_input[:n_drifti] += 0
 # nonFC_input[10:] += 1
@@ -87,7 +88,7 @@ for t in range(t_FC):
     next_FR = nn.step(Input_to_network)
     # frs = (next_FR.numpy() > act_threshold)
     FR_history.append(next_FR.numpy())
-    EX_history.append(nn.exc.detach().clone().numpy())
+    EX_history.append(nn.excitability.detach().clone().numpy())
 
 # rec_weights.append(nn.W.detach().clone().numpy())
 ff_weights.append(nn.input_w.detach().clone().numpy())
@@ -104,8 +105,8 @@ n_off_days = 5
 for day in range(n_off_days):
     torch.manual_seed(day)  # Set seed for reproducibility
     nonFC_input = torch.abs(torch.normal(mean=0.0, std=1.0, size=(ni,))) 
-    nn.exc[(day)*20:(day+1)*20] -= e
-    nn.exc[(day+1)*20:(day+2)*20] += e
+    nn.excitability[(day)*20:(day+1)*20] -= e
+    nn.excitability[(day+1)*20:(day+2)*20] += e
     for i in range(Nrep):
         if binary_array[i] == 2:
             Input_to_network = FC_input
@@ -115,7 +116,7 @@ for day in range(n_off_days):
             next_FR = nn.step(nonFC_input)
             # frs = (next_FR.numpy() > act_threshold)
             FR_history.append(next_FR.numpy())
-            EX_history.append(nn.exc.detach().clone().numpy())
+            EX_history.append(nn.excitability.detach().clone().numpy())
         input_at_t = np.tile(Input_to_network, (t_off, 1))
         # breakpoint()
         input_history = np.concatenate((input_history,input_at_t))
@@ -125,14 +126,14 @@ for day in range(n_off_days):
 
 # rec_weights.append(nn.W.detach().clone().numpy())
 t_recall = 200
-nn.exc[(n_off_days)*20:(n_off_days+1)*20] -= e
-nn.exc[-20:] += e
+nn.excitability[(n_off_days)*20:(n_off_days+1)*20] -= e
+nn.excitability[-20:] += e
 for t in range(t_recall):
     # print((n_off_days)*20,(n_off_days+1)*20)
     next_FR = nn.step(FC_input)
     # frs = (next_FR.numpy() > act_threshold)
     FR_history.append(next_FR.numpy())
-    EX_history.append(nn.exc.detach().clone().numpy())
+    EX_history.append(nn.excitability.detach().clone().numpy())
 last_activity.append(FR_history[-1])    
 ff_weights.append(nn.input_w.detach().clone().numpy())
 FR_history = np.stack(FR_history)
@@ -169,14 +170,14 @@ plot_activity_n_excitability_time([FR_history.T,EX_history.T,input_history.T],
 plot_weights_over_time(ff_weights,
                        titles= ["FC","Of1","Of2","Of3","Of4","Of5","Recall"] ,
                        fname="./plots/Reimagined/FF_w.png",
-                       cmaps='gray_r')
+                       cmaps='gray_r',plot_title="CA3 -> CA1 weights over time")
 
 
 breakpoint()
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
 Title = "Ensemble similarity of encoding and offline + recall"
-plot_row_correlations(avg_FC,np.column_stack([avg_days,avg_recall]), xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.png", use_bar_plot=True)
+plot_row_correlations(avg_FC.T,np.column_stack([avg_days,avg_recall]).T, xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.png", use_bar_plot=True)
 
 xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
 Title = "Ensemble similarity of recall and offline + encoding"
-plot_row_correlations(avg_recall,np.column_stack([avg_FC, avg_days]), xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.png", use_bar_plot=True)
+plot_row_correlations(avg_recall.T,np.column_stack([avg_FC, avg_days]).T, xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.png", use_bar_plot=True)

@@ -85,7 +85,7 @@ def plot_activities(activity1, activity2, title,var_name, fname, color1='red', c
     # save_plot(fname)  # Uncomment if saving is needed
     plt.show()
     
-def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
+def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10,plot_title =""):
     """
     Plots weight matrices from different time points in one row.
 
@@ -95,7 +95,7 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
         fname: Filename to save the complete figure.
         cmaps: List of colormaps (or a single colormap) for the subplots.
     """
-    breakpoint()
+    # breakpoint()
     num_plots = len(weights)
     fig = plt.figure(figsize=(5 * num_plots, 5))
     gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
@@ -115,7 +115,7 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
     cax = fig.add_subplot(gs[0, -1])
     cbar = fig.colorbar(ims[0], cax=cax)
     cbar.ax.tick_params(labelsize=colorbar_fontsize)
-
+    # plt.title(plot_title, fontsize=title_fontsize)
     plt.tight_layout()
     save_plot(fname)
     plt.show()
