@@ -36,7 +36,7 @@ class TwoAreaModel:
         # Random initial weights
         # self.W_inp_MTL = torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_inp, nMTL))) * 0.1
         # self.W_inp_CTX = torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_inp, nCTX))) * 0.1
-        self.W_MTL_CTX = 0.5
+        self.W_MTL_CTX = 0 #torch.abs(torch.normal(mean=0.0, std=1.0, size=(nMTL, nCTX))) * 0.1
         self.W_MTL_MTL = torch.zeros(size=(nMTL, nMTL))
         self.W_CTX_CTX = torch.zeros(size=(nCTX, nCTX))
 
@@ -73,7 +73,8 @@ class TwoAreaModel:
         post_mask_CTX = (self.r_CTX > self.threshold).float()
 
         hebbian_dW_MTL_MTL = self.lr_MTL * torch.outer(self.r_MTL*post_mask_MTL, self.r_MTL) * self.dt
-        hebbian_dW_CTX_CTX = self.lr_CTX * torch.outer(self.r_CTX*post_mask_CTX, self.r_CTX) * self.dt
+        hebbian_dW_CTX_CTX = self.lr_CTX * torch.outer(self.r_CTX, self.r_CTX) * self.dt
+        print(torch.max(hebbian_dW_MTL_MTL),torch.max(hebbian_dW_CTX_CTX))
         # hebbian_dW_MTL_CTX = self.lr_CTX * torch.outer(self.r_CTX*post_mask_CTX, self.r_MTL) * self.dt
 
         # hebbian_dW_inp_MTL = self.lr_MTL * torch.outer(self.r_INP,self.r_MTL*post_mask_MTL) * self.dt
@@ -82,7 +83,7 @@ class TwoAreaModel:
         # weight decay due to weight homeostasis
         decay_MTL_MTL = self.decay_MTL * self.W_MTL_MTL * self.dt
         decay_CTX_CTX = self.decay_CTX * self.W_CTX_CTX * self.dt
-        decay_MTL_CTX = self.decay_CTX * self.W_MTL_CTX * self.dt
+        # decay_MTL_CTX = self.decay_CTX * self.W_MTL_CTX * self.dt
         # decay_inp_MTL = self.decay_MTL * self.W_inp_MTL * self.dt
         # decay_inp_CTX = self.decay_CTX * self.W_inp_CTX * self.dt
         # breakpoint()
@@ -107,16 +108,17 @@ torch.manual_seed(2025)
 n_INP = 40
 n_MTL = 40
 n_CTX = 40
-e_MTL = torch.zeros(size=(n_MTL,))#torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_MTL,)))
+e_MTL = torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_MTL,)))
 e_MTL[:8] += 4
-e_CTX = torch.zeros(size=(n_CTX,))#torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_CTX,))) 
+e_CTX = torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_CTX,))) 
 e_CTX[:8] += 3
-act_threshold = 0.5
-nn = TwoAreaModel(n_INP,n_MTL,n_CTX,e_MTL,e_CTX,tau=50.0,dt = 0.1,lr_MTL = 1/700,decay_MTL=1/1000,lr_CTX = 0,decay_CTX=1e-4,threshold=0)
+act_threshold = 0.0
+nn = TwoAreaModel(n_INP,n_MTL,n_CTX,e_MTL,e_CTX,tau=50.0,dt = 0.1,lr_MTL = 1/700,decay_MTL=1/1000,lr_CTX = 2e-3,decay_CTX=0,threshold=0)
 t_FC = 2000
 ID = 1000
-input = 10*torch.ones(n_INP) 
+input = 12*torch.ones(n_INP) 
 zero_input = 0*input
+noise_input = 12*torch.abs(torch.normal(mean=0.0, std=1.0, size=(n_INP,))) * 0.1
 # input[:] = 5
 nn.r_INP = input
 MTL_FR_history = []
@@ -165,7 +167,8 @@ for day in range(num_days):
     nn.ext_MTL[day*8:(day+1)*8] -= 4
     nn.ext_MTL[(day+1)*8:(day+2)*8] += 4
     for i in range(reps):
-        nn.r_INP = input
+        nn.r_INP = noise_input
+        nn.W_MTL_CTX = 1.0
         for t in range(0,t_off):
             next_MTL_FR,next_CTX_FR = nn.step()
             frs = (next_MTL_FR.numpy() > act_threshold)
@@ -177,7 +180,8 @@ for day in range(num_days):
         input_at_t = np.tile(nn.r_INP, (t_off, 1))
         input_history = np.concatenate((input_history,input_at_t))
 
-        nn.r_INP = zero_input
+        nn.r_INP = noise_input / 6
+        nn.W_MTL_CTX = 0.0
         for t in range(0,IR_off):
             next_MTL_FR,next_CTX_FR = nn.step()
             frs = (next_MTL_FR.numpy() > act_threshold)
@@ -229,7 +233,7 @@ plot_activity_n_excitability_time([ex_mtl_history.T,ex_ctx_history.T,input_histo
                        titles=[
                                 "Neuronal Excitability (MTL)",
                                 "Neuronal Excitability (CTX)",
-                                "Input FR"],
+                                "External input"],
                        fname="./plots/twoRNN/excitability_n_input.png",
                        cmaps=[ 'Greens','Greens',"Reds"])
 
