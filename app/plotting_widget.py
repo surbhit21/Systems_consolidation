@@ -211,7 +211,7 @@ def plot_corr_matrix(data,fname):
     # Mask the diagonal (set it to NaN so it won't be colored)
     mask = np.eye(corr_matrix.shape[0], dtype=bool)
     min_v,max_v = np.min(corr_matrix), np.max(corr_matrix)
-    sns.heatmap(corr_matrix, annot=False, cmap="viridis", vmin=min_v, vmax=max_v, square=True, mask=mask, cbar=True)
+    sns.heatmap(corr_matrix, annot=True, cmap="viridis", vmin=min_v, vmax=max_v, square=True, mask=mask, cbar=True,annot_kws={"size": 8, "color": "white", "ha": "center", "va": "center"})
 
     # plt.colorbar(label='Correlation Coefficient')
     plt.title('Correlation Matrix')

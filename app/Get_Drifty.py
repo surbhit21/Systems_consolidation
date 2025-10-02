@@ -1,22 +1,24 @@
 import ANNarchy as ann
+from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 from plotting_widget import *
 from sklearn.decomposition import PCA
 from Utilities import *
+
 LIneuron = ann.Neuron(
     parameters = dict(
         tau = 50,
         input_i = ann.Parameter(0.0,locality="local"),  # input current
-        I0 = 5,
+        I0 = 1,
         I1 = 1,
-        I2 = 0.01,
+        I2 = 0.05,
         Epsi_i = ann.Parameter(0.0,locality="local"),  # Epsi_i parameter
         
     ),
     equations = [
-        'tau * dx/dt  + x = pos(input_i - I0 - I1 * norm1(x) - I2 * norm2(x) + Epsi_i + sum(exc))  ',  # reset small values to zero
-        'r = if x < 1e-3: 0 else: x',  # firing rate
+        'tau * dx/dt  + x = Epsi_i * pos(input_i - I0 - I1 * norm1(x) + sum(exc))  ',  # reset small values to zero
+        'r =  x',  # firing rate
         'ex = Epsi_i',
         'inp = input_i'
         
@@ -41,8 +43,8 @@ E_synapse = ann.Synapse(
     parameters = dict(
         tau_w = 800,
         lr = 1,
-        tau_decay = 4000,
-        max_weight = 0.5,
+        tau_decay = 1000,
+        max_weight = 1,
         min_weight = 0.0,
         freeze = ann.Parameter(False, locality="semiglobal",type=bool)  # freeze parameter to control weight updates
     ),
@@ -67,17 +69,17 @@ E_synapse = ann.Synapse(
 #     ]
 # )
 
-np.random.seed(1)
-num_HPC_E_neuron = 40
+np.random.seed(102)
+num_HPC_E_neuron = 70
 stable_neurons = 5
 # normal distribution parameters for Epsi_i
 mu = 0
-sigma = 1
+sigma = 2
 orig_exitability = np.abs(np.random.uniform(mu, sigma, num_HPC_E_neuron))
 E = 1.5 # Epsi_i increase factor for neurons
 E_off = 1.5
 # encoding time duration
-T_encode = 400
+T_encode = 500
 
 
 # Offline simulation parameters
@@ -86,14 +88,14 @@ T = 200 # duration of repetitions
 IR = 100 # Inter-repetition interval
 num_days = 5 # number of offline days in the simulation
 ID = 1000 #inter-day delay
-off_set = 5
+off_set = 0
 # recall time duration
-T_recall =  200
+T_recall =  500
 
 
-delta = 40 # input current
+delta = 15 # input current
 delta_2 = 15
-theta = 1 #threshold firing rate for active neurons
+theta = 5 #threshold firing rate for active neurons
 c = 1 #cap pn recurrent weights
 # very_high_theta = 6.7
 I_noise_mu, I_noise_sigma = 0, 1 # mean and standard deviation for noise current
@@ -114,16 +116,6 @@ Eop_proj.connect_all_to_all(weights=ann.Uniform(0.0,0.01))
 
 net.compile(clean=True)
 
-# breakpoint()
-Eop_proj.lr = 0.1
-Eop_proj.tau_decay = 1000
-Eop_proj.tau_w = 400
-# Eop_proj.max_weight = 1
-# Eop_proj.min_weight = -1
-
-# E_pop[10:].input_i = np.array(40*[0])
-# E_pop[10:].Epsi_i = np.array(40*[0])
-
 # setting time step
 net.config(dt=del_t)
 
@@ -141,12 +133,12 @@ highly_active_neurons  = []
 # ENCODING PHASE
 E_pop[:].Epsi_i = orig_exitability
 # increasing excitability of first 10 neurons
-E_pop[0:10].Epsi_i += E
+# E_pop[0:10].Epsi_i += E
 # setting input to each neurn
-E_pop[:].input_i = np.array([delta]*num_HPC_E_neuron)
+E_pop[:].input_i = np.array([delta]*num_HPC_E_neuron) + noise_current
 net.simulate(T_encode)
 encoding_ensamble = get_active_neurons(E_pop.r,theta)
-EE_proj.freeze[:10] = [True]*10  # freeze weights after encoding
+# EE_proj.freeze[:10] = [False]*10  # freeze weights after encoding
 # highly_active_en_neurons = get_active_neurons(E_pop.r, very_high_theta)
 # breakpoint()
 activity_vector.append(E_pop.r)
@@ -158,25 +150,26 @@ op_weights.append(Eop_proj.connectivity_matrix())
 # EE_proj[:10].freeze = True  # freeze weights for first 10 neurons
 E_pop[:].input_i = noise_current
 # EE_proj.freeze = True  
-net.simulate(ID//2)
+net.simulate(ID)
 
 # OFFLINE PHASE
 offline_ensamble = []
 for day in range(1,num_days+1):
     # setting excitability for different set of neurons each day
-    E_pop[:].Epsi_i = orig_exitability #np.abs(np.random.uniform(mu, sigma, num_HPC_E_neuron))
-    for t in top_50_neurons:
-        E_pop[t].Epsi_i += E
+    E_pop[:].Epsi_i = np.abs(np.random.uniform(mu, sigma, num_HPC_E_neuron))
+    # for t in top_50_neurons:
+    #     E_pop[t].Epsi_i += E
     # for x in highly_active_en_neurons:
     #     E_pop[x].Epsi_i += E*(1.2)
-    E_pop[off_set+(day)*5:off_set+(day+1)*5].Epsi_i += E_off
+    # E_pop[off_set+(day)*10:off_set+(day+1)*10].Epsi_i += E_off
     for j in range(Nrep):
         # seed = j
         # setting a random seed
-        # np.random.seed(j)
+        np.random.seed(j)
         # stim_phase 
         # input is set for all neurons in the population
-        E_pop[:].input_i = np.array([delta_2]*num_HPC_E_neuron)
+        noise_current = np.random.normal(I_noise_mu, I_noise_sigma, num_HPC_E_neuron)  # noise current
+        E_pop[:].input_i = np.array([delta_2]*num_HPC_E_neuron) + noise_current
         EE_proj.freeze = False
         # exitability is drawn from a uniform distri
         # now based on day the exicitability is increased by a factor of E for some neurons
@@ -225,13 +218,14 @@ for day in range(1,num_days+1):
 
 # Time for recall
 recall_ensamble = []
-E_pop[:].Epsi_i = orig_exitability
+np.random.seed(11)
+E_pop[:].Epsi_i =np.random.normal(I_noise_mu, I_noise_sigma, num_HPC_E_neuron)
 # for x in highly_active_en_neurons:
 #         E_pop[x].Epsi_i += E*(1.2)
 # increasing excitability of first 10 neurons
-for t in top_50_neurons:
-    E_pop[t].Epsi_i += E
-E_pop[-5:].Epsi_i += E_off
+# for t in top_50_neurons:
+#     E_pop[t].Epsi_i += E
+E_pop[-10:].Epsi_i += E_off
 # setting input to each neurn
 E_pop[:].input_i = np.array([delta]*num_HPC_E_neuron)
 # EE_proj.freeze = False
@@ -331,7 +325,7 @@ plot_row_correlations(avg_activity[0],avg_activity[1:-1], xlabs=xlabs,title=Titl
 xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
 Title = "Ensemble similarity of recall and offline + encoding"
 # breakpoint()
-plot_row_correlations(avg_activity[-1,:10],avg_activity[:-1,:10], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/Recall_corr.png".format(E_name,I_name), use_bar_plot=True)
+plot_row_correlations(avg_activity[-1],avg_activity[:-1], xlabs=xlabs,title=Title,fname="./plots/E_{0}_{1}/Recall_corr.png".format(E_name,I_name), use_bar_plot=True)
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5"]
 Title = "Ensemble similarity of recall and offline"
 
@@ -348,6 +342,29 @@ print("Ensemble overlap between encoding and recall: \n", en_recall_overlap/enco
 print("Ensemble overlap between encoding and offline: \n", en_off_overlap.mean(axis=1)/encoding_ensamble.shape[0])
 print("Ensemble overlap between recall and offline: \n", re_off_overlap.mean(axis=1)/ recall_ensamble.shape[0])
 plot_pca_2d(avg_activity.T)
+total_counter = Counter()
+results = {}
+for i, arr in enumerate(offline_ensamble, 1):
+    counts = Counter(arr)
+    results[f"Array_{i}"] = dict(counts)   # store per array
+    total_counter.update(counts)           # accumulate totals
+
+# add totals into the dictionary
+results["Total"] = dict(total_counter)
+
+# print(results)
+frs = []
+s_Active= []
+for i in encoding_ensamble:
+    frs.append(avg_activity[0][i])
+    s_Active.append(results["Total"][i]/Nrep)
+
+plt.plot(s_Active,frs,'o')
+plt.ylabel("Firing rate during encoding")
+plt.xlabel("Times active during offline")
+plt.title("Reactivation frequency vs Firing rate during encoding")
+plt.savefig("./plots/E_{0}_{1}/FR_vs_reactivation.png".format(E_name,I_name))
+plt.show()
 breakpoint()
 # plot_rowwise_com(op_weights.T,num_days,fname="./plots/E_{0}_{1}/delamare_2024_F3D.png".format(E_name,I_name))
 

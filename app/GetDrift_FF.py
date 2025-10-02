@@ -1,12 +1,12 @@
 import matplotlib.pyplot as plt
+import json
 import numpy as np
-import os
 from plotting_widget import *
 import torch 
 import torch.nn.functional as F
 from Utilities import average_firing_rates_with_active,ensamble_overlap
 class twolayer_FF:
-    def __init__(self, n_inp, n_neurons,baseline_e,tau=10.0, dt=1.0, act=torch.relu, lr=8e-2, decay_r=1e-2, threshold=0, I0=1, I1=0.05, I2=0.001):
+    def __init__(self, n_inp, n_neurons,baseline_e,tau=20.0, dt=1.0, act=torch.relu, lr=1/800, decay_r=1/1000, I0=1, I1=0.05, I2=0.001):
         self.n_neurons = n_neurons
         self.tau = tau  # rate constant 
         self.dt = dt  # discretization step
@@ -18,11 +18,12 @@ class twolayer_FF:
         self.I1 = I1
         self.I2 = I2
         self.excitability = baseline_e
-        self.threshold = threshold
+        self.plas_threshold = 1
+        # self.threshold = threshold
         
         # Initialize random input weights
-        self.input_w = torch.abs(torch.randn(n_inp, n_neurons)) / n_inp**0.5
-        
+        self.input_w = torch.rand(n_neurons,n_inp,) 
+        self.rec_w = torch.zeros(n_neurons, n_neurons)
         
         # Zero initial rate state
         self.rates = torch.zeros(n_neurons)
@@ -33,151 +34,217 @@ class twolayer_FF:
         input_vector: shape [n_neurons]
         """
         # calculating the input to the RNN
-        input_vector = input_FR @ self.input_w 
+        input_vector = input_FR #@ self.input_w
 
         # blanket inhibition to the RNN
-        I_inhib = self.I0 + self.I1 * torch.sum(self.rates) + self.I2 + torch.sum(self.rates**2)
+        I_inhib = self.I0 + self.I1 * torch.mean(self.rates) + self.I2 * torch.mean(self.rates**2)
 
         # total input to the RNN
-        input_current =  input_vector + self.excitability - I_inhib 
+        input_current =  input_vector / I_inhib 
 
         # rate change as the nonlinear ODE
-        dr_dt = (-self.rates +  self.act(input_current)) / self.tau
+        dr_dt = (-self.rates +   self.act(self.excitability + input_current)) / self.tau
 
         self.rates += (dr_dt * self.dt)
-    
-        post_mask = (self.rates > self.threshold).float()
-        
+        # print(self.rates.max())
+        # post_mask = (self.rates > self.threshold).float()
+        post_mask = self.rates > self.plas_threshold
         # hebbian plasticity in RNN weights
-        hebbian_dw = self.lr * torch.outer(input_FR, self.rates*post_mask) * self.dt
-
-        decay = self.decay_r * self.input_w * self.dt
+        hebbian_dw = self.lr * torch.outer(self.rates*post_mask, self.rates) * self.dt
+        decay = self.decay_r * self.rec_w * self.dt
         # hebbian plasticity in input weights
-        self.input_w += hebbian_dw - decay
+        self.rec_w += (hebbian_dw - decay)
 
-        self.input_w = torch.clamp(self.input_w, 0.0, 1.0)  # Ensure weights are non-negative
+        # hebbian plasticity in RNN weights
+        # hebbian_dw = self.lr * torch.outer(self.rates, input_FR) * self.dt
+        # decay = 0#self.decay_r * self.rec_w * self.dt
+        # hebbian plasticity in input weights
+        # self.input_w += (hebbian_dw - decay)
+
+        self.rec_w = torch.clamp(self.rec_w, 0.0, 1.0)  # Ensure weights are non-negative
+        # self.input_w = torch.clamp(self.input_w, 0.0, 1.0)  # Ensure weights are non-negative
         return self.rates.detach().clone()
 
 torch.manual_seed(2025)
-n = 140
-e = 3.5
-n_drifti ,ni_FC = 40,10 #(40 drify and 10 contextual neurons)
-ni = n_drifti + ni_FC
-act_threshold = 1
-base_e = torch.abs(torch.normal(mean=0.0, std=1.0, size=(n,))) * 0.01
-nn = twolayer_FF(ni,n,baseline_e=base_e,tau=50.0,dt = 0.1,lr = 0.05,threshold=0)
-
-t_FC = 200
-input = torch.abs(torch.normal(mean=0.0, std=1.0, size=(ni,)))
-FC_input = input.clone()
-FC_input[n_drifti:] += 10
-nn.excitability[:20] += e
-nonFC_input = input
-nonFC_input[:n_drifti] += 0
-# nonFC_input[10:] += 1
 FR_history = []
 EX_history = []
 rec_weights = []
 ff_weights = []
 last_activity = []
-# rec_weights.append(nn.W.detach().clone().numpy())
-# ff_weights.append(nn.input_w.detach().clone().numpy())
-
-Input_to_network = FC_input
+input_history = []
+#
+n = 140
+n_inp = 140
+E_fl = 1.5
+E_ref = 0
+threshold = 0
+base_E = torch.abs(torch.normal(0,0.5,size=(n,)))
+nn = twolayer_FF(n_inp=n_inp, n_neurons=n, baseline_e = base_E.clone(), tau=20.0, dt=0.1, act=torch.relu, lr=1/800, decay_r=1/1000, I0=1, I1=0.3, I2=0)
+input = 10*torch.ones(n_inp)
+noisy_input = torch.normal(0,1,size=(n_inp,))
+# input = noisy_input
+zero_input = torch.zeros(n_inp)
+t_FC = 500
+ID = 1000
+nn.excitability[:20] += E_fl
+# rec_weights.append(nn.rec_w.detach().clone().numpy())
 for t in range(t_FC):
-    next_FR = nn.step(Input_to_network)
-    # frs = (next_FR.numpy() > act_threshold)
-    FR_history.append(next_FR.numpy())
+    next_FR = nn.step(input)
+    FR_history.append(next_FR.detach().clone().numpy())
     EX_history.append(nn.excitability.detach().clone().numpy())
+    input_history.append(input.numpy)
+rec_weights.append(nn.rec_w.detach().clone().numpy())
+# ff_weights.append(nn.input_w.detach().clone().numpy())
+last_activity.append(np.mean(FR_history[-100:],axis=0))  
+for t in range(ID):
+        next_FR = nn.step(zero_input)
+        FR_history.append(next_FR.detach().clone().numpy())
+        EX_history.append(nn.excitability.detach().clone().numpy())
+        input_history.append(zero_input.numpy())
+frs = np.array(FR_history)
+mean_FR = frs.mean(axis=1)
+# breakpoint()
+plt.plot(np.arange(0,frs.shape[0],1)*0.001,mean_FR,label = "E")
+plt.xlabel("Time (s)")
+plt.ylabel("Mean FR (Hz)")
+plt.title("Mean Firing Rate during FC")
+plt.legend()
+plt.savefig("./plots/Reimagined/Mean_FR_FC.png")
+plt.show()
+plt.close()
 
-# rec_weights.append(nn.W.detach().clone().numpy())
-ff_weights.append(nn.input_w.detach().clone().numpy())
-last_activity.append(FR_history[-1])
-input_history = np.tile(Input_to_network.cpu().numpy(), (t_FC, 1))
 
-# single offline sessio
+N_off_days = 5
 t_off = 200
-Nrep = 1
-binary_array = torch.randint(0, 2, (10,))
-print(binary_array)
-n_off_days = 5
-
-for day in range(n_off_days):
-    torch.manual_seed(day)  # Set seed for reproducibility
-    nonFC_input = torch.abs(torch.normal(mean=0.0, std=1.0, size=(ni,))) 
-    nn.excitability[(day)*20:(day+1)*20] -= e
-    nn.excitability[(day+1)*20:(day+2)*20] += e
-    for i in range(Nrep):
-        if binary_array[i] == 2:
-            Input_to_network = FC_input
-        else:
-            Input_to_network = nonFC_input
+IR = 100
+Nrep = 3
+for day in range(N_off_days):
+    nn.excitability = base_E.clone()
+    # nn.excitability[day*20:(day)*20+20] -= (E_ref)
+    nn.excitability[(day+1)*20:(day+1)*20+20] += E_fl
+    for rep in range(Nrep):
         for t in range(t_off):
-            next_FR = nn.step(nonFC_input)
-            # frs = (next_FR.numpy() > act_threshold)
-            FR_history.append(next_FR.numpy())
+            next_FR = nn.step(input*0.8)
+            FR_history.append(next_FR.detach().clone().numpy())
             EX_history.append(nn.excitability.detach().clone().numpy())
-        input_at_t = np.tile(Input_to_network, (t_off, 1))
-        # breakpoint()
-        input_history = np.concatenate((input_history,input_at_t))
-        # input_history = np.concatenate([input_history, input_at_t[np.newaxis, :]], axis=0)
-    last_activity.append(FR_history[-1])
-    ff_weights.append(nn.input_w.detach().clone().numpy())
+            input_history.append(input.numpy())
+            
+        for t in range(IR):
+            next_FR = nn.step(zero_input)
+            FR_history.append(next_FR.detach().clone().numpy())
+            EX_history.append(nn.excitability.detach().clone().numpy())
+            input_history.append(zero_input.numpy())
+    rec_weights.append(nn.rec_w.detach().clone().numpy())
+    # ff_weights.append(nn.input_w.detach().clone().numpy())
+    last_activity.append(np.mean(FR_history[-300:-100],axis=0))
+    for t in range(ID):
+        next_FR = nn.step(zero_input)
+        FR_history.append(next_FR.detach().clone().numpy())
+        EX_history.append(nn.excitability.detach().clone().numpy())
+        input_history.append(zero_input.numpy())
 
-# rec_weights.append(nn.W.detach().clone().numpy())
-t_recall = 200
-nn.excitability[(n_off_days)*20:(n_off_days+1)*20] -= e
-nn.excitability[-20:] += e
-for t in range(t_recall):
-    # print((n_off_days)*20,(n_off_days+1)*20)
-    next_FR = nn.step(FC_input)
-    # frs = (next_FR.numpy() > act_threshold)
-    FR_history.append(next_FR.numpy())
+  
+t_recall = 500
+ID = 1000
+nn.excitability = base_E.clone()
+# nn.excitability[(N_off_days)*20:(N_off_days)*20+20] -= (E_ref)
+nn.excitability[-20:] += E_fl
+for t in range(t_FC):
+    next_FR = nn.step(input)
+    FR_history.append(next_FR.detach().clone().numpy())
     EX_history.append(nn.excitability.detach().clone().numpy())
-last_activity.append(FR_history[-1])    
-ff_weights.append(nn.input_w.detach().clone().numpy())
+    input_history.append(input.numpy)
+rec_weights.append(nn.rec_w.detach().clone().numpy())
+# ff_weights.append(nn.input_w.detach().clone().numpy())
+last_activity.append(np.mean(FR_history[-100:],axis=0))  
+for t in range(ID):
+        next_FR = nn.step(zero_input)
+        FR_history.append(next_FR.detach().clone().numpy())
+        EX_history.append(nn.excitability.detach().clone().numpy())
+        input_history.append(zero_input.numpy())
+
+
+breakpoint()
+
+
+
 FR_history = np.stack(FR_history)
+# input_history = np.stack(input_history)
 EX_history = np.stack(EX_history)
 last_activity = np.stack(last_activity)
-plot_corr_matrix(last_activity, fname="./plots/Drift_FF/corr_matrix.png")
+sim_params = {
+    "n": n,
+    "n_inp": n_inp,
+    "E_fl": E_fl,
+    "threshold": threshold,
+    "t_FC": t_FC,
+    "ID": ID,
+    "N_off_days": N_off_days,
+    "t_off": t_off,
+    "IR": IR,
+    "Nrep": Nrep,
+    "t_recall": t_recall,
+    "seed": 2025  # if you want reproducibility
+}
+data = {
+        "model_params": {
+            "n_neurons": nn.n_neurons,
+            "tau": nn.tau,
+            "dt": nn.dt,
+            "lr": nn.lr,
+            "decay_r": nn.decay_r,
+            "I0": nn.I0,
+            "I1": nn.I1,
+            "I2": nn.I2,
+            # "excitability": model.excitability.detach().cpu().numpy().tolist(),
+        },
+        "simulation_params": sim_params
+    }
+filename = "./plots/Reimagined/all_params.json"
+with open(filename, "w") as f:
+        json.dump(data, f, indent=4)
+    # print(f"All parameters saved to {filename}")
+plot_corr_matrix(last_activity, fname="./plots/Reimagined/corr_matrix.png")
 
 avg_FC, active_FC, avg_days, active_days, avg_recall, active_recall \
     = average_firing_rates_with_active(FR_history.T, 
                                     T_FC=t_FC,
                                     T_offline=t_off, 
-                                    Nday=n_off_days, 
+                                    T_ir=IR,
+                                    Nday=N_off_days, 
                                     Nrep=Nrep, 
                                     T_recall=t_recall, 
-                                    threshold=act_threshold)
+                                    ID=ID,
+                                    threshold=threshold)
 
 en_recall_overlap = ensamble_overlap(active_FC, [active_recall])
 en_off_overlap = ensamble_overlap(active_FC, active_days)
 re_off_overlap = ensamble_overlap(active_recall, active_days)
-print("Ensemble overlap between encoding and recall: \n", en_recall_overlap/len(active_FC))
-print("Ensemble overlap between encoding and offline: \n", en_off_overlap/len(active_FC))
-print("Ensemble overlap between recall and offline: \n", re_off_overlap/ len(active_recall))
-
-plot_activity_n_excitability_time([FR_history.T,EX_history.T,input_history.T],
+print("Ensemble overlap between encoding and recall: \n", len(en_recall_overlap[0])/len(active_FC))
+print("Ensemble overlap between encoding and offline: \n", [len(x)/len(active_FC) for x in en_off_overlap])
+print("Ensemble overlap between recall and offline: \n", [len(x)/ len(active_recall) for x in re_off_overlap])
+FR_history_th = (FR_history > threshold).astype(float)*FR_history
+plot_activity_n_excitability_time([FR_history_th.T,EX_history.T],
                        titles=['Neuronal Activity',
-                                "Neuronal Excitability",
-                                "Input FR"],
+                                "Neuronal Excitability"],
                        fname="./plots/Reimagined/Activity_n_excitability.png",
-                       cmaps=['Blues', 'Greens',"Reds"])
-# plot_weights_over_time(rec_weights,
-#                        titles= ["before","after"] ,
-#                        fname="./plots/Reimagined/Rec_w.png",
-#                        cmaps='gray_r')
-plot_weights_over_time(ff_weights,
-                       titles= ["FC","Of1","Of2","Of3","Of4","Of5","Recall"] ,
-                       fname="./plots/Reimagined/FF_w.png",
-                       cmaps='gray_r',plot_title="CA3 -> CA1 weights over time")
+                       cmaps=['Blues', 'Greens'])
+labs = ["FC"] + [f"Off {i+1}" for i in range(N_off_days)]
+plot_weights_over_time(rec_weights,
+                       titles=  labs,
+                       fname="./plots/Reimagined/Rec_w.png",
+                       cmaps='gray_r')
+# plot_weights_over_time(ff_weights,
+#                        titles= ["FC","Of1","Of2","Of3","Of4","Of5","Recall"] ,
+#                        fname="./plots/Reimagined/FF_w.png",
+#                        cmaps='gray_r',plot_title="CA3 -> CA1 weights over time")
 
 
 breakpoint()
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
 Title = "Ensemble similarity of encoding and offline + recall"
-plot_row_correlations(avg_FC.T,np.column_stack([avg_days,avg_recall]).T, xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.png", use_bar_plot=True)
+plot_row_correlations(avg_FC.T,np.column_stack([avg_days.mean(axis=2),avg_recall]).T, xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.png", use_bar_plot=True)
 
 xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
 Title = "Ensemble similarity of recall and offline + encoding"
-plot_row_correlations(avg_recall.T,np.column_stack([avg_FC, avg_days]).T, xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.png", use_bar_plot=True)
+plot_row_correlations(avg_recall.T,np.column_stack([avg_FC, avg_days.mean(axis=2)]).T, xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.png", use_bar_plot=True)
