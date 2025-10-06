@@ -198,7 +198,7 @@ def average_firing_rates_with_active(firing_rates, T_FC, T_offline,T_ir, Nday, N
     N, T_total = firing_rates.shape
     
     # Check consistency
-    expected_T = T_FC + ID + Nday * (Nrep * (T_offline + T_ir) + ID) + T_recall + ID
+    expected_T = T_FC + Nday * (Nrep * (T_offline + T_ir) + ID) + T_recall
     if T_total != expected_T:
         raise ValueError(f"Total time steps mismatch: expected {expected_T}, got {T_total}")
     
@@ -218,14 +218,14 @@ def average_firing_rates_with_active(firing_rates, T_FC, T_offline,T_ir, Nday, N
     active_days = np.zeros((N, Nday,Nrep), dtype=bool)
     for day in range(Nday):
         for rep in range(Nrep):
-            start_idx = T_FC + ID + day * (Nrep * (T_offline + T_ir) + ID) + rep * (T_offline + T_ir)
+            start_idx = T_FC + day * (Nrep * (T_offline + T_ir) + ID) + rep * (T_offline + T_ir)
             end_idx = start_idx + T_offline
             avg_days[:, day,rep] = np.array([mean_above_threshold(firing_rates[i, start_idx:end_idx], threshold) for i in range(N)])
             active_days[:, day,rep] = np.any(firing_rates[:, start_idx:end_idx] > threshold, axis=1)
     active_neurons_days = [np.where(active_days[:, day])[0] for day in range(Nday)]
     # Average and active neurons for recall
-    avg_recall = np.array([mean_above_threshold(firing_rates[i, -(T_recall+ID):-(ID)], threshold) for i in range(N)])
-    active_recall = np.any(firing_rates[:, -(T_recall+ID):-(ID)] > threshold, axis=1)
+    avg_recall = np.array([mean_above_threshold(firing_rates[i, -(T_recall):], threshold) for i in range(N)])
+    active_recall = np.any(firing_rates[:, -(T_recall):] > threshold, axis=1)
     active_neurons_recall = np.where(active_recall)[0]
     return avg_FC, active_neurons_FC, avg_days, active_neurons_days, avg_recall, active_neurons_recall
 
