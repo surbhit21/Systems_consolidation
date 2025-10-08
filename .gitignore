@@ -201,3 +201,4 @@ app/annarchy_builds
 # project related folders and file
 plots
 *.png
+data

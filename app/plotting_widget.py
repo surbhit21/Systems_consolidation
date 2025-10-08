@@ -348,3 +348,393 @@ def plot_avg_activity(activities, titles, fname, cmaps='gray', title_fontsize=14
     plt.tight_layout()
     save_plot(fname)
     plt.show()
+
+
+def plot_mean_std_corr_over_time(
+    data_3d,
+    ref_time_idx=0,
+    xlabels=None,
+    title="Mean ± SD of neuron-ensemble correlation over time (across simulations)",
+    fname=None,
+    include_ref_bar=False,
+    bar_colors=None,
+    font_size=14,
+    tick_fontsize=12,
+    capsize=5,
+):
+    """
+    Compute & plot mean ± sem of correlations over time across simulations.
+
+    Parameters
+    ----------
+    data_3d : np.ndarray
+        Shape (sims, time, neurons). Axis 0 = simulations.
+    ref_time_idx : int
+        The reference time index (e.g., 0 for Encoding, -1 for Recall).
+        Correlations are computed: corr( data[s, ref_time_idx, :], data[s, t, :] ) for each sim s.
+    xlabels : list[str] or None
+        Labels for the bars. If None, generated automatically.
+        If include_ref_bar=False, labels should correspond to time points excluding ref_time_idx.
+    title : str
+        Plot title.
+    fname : str or None
+        If provided, saves to this path; else shows the plot.
+    include_ref_bar : bool
+        If True, include the bar for the reference time (which will be 1.0 unless vectors are constant).
+    bar_colors : list or None
+        Custom colors for bars. If None, uses a categorical colormap.
+    font_size : int
+        Font size for axis labels/title.
+    tick_fontsize : int
+        Font size for tick labels.
+    capsize : int
+        Error bar capsize.
+
+    Returns
+    -------
+    mean_corr : np.ndarray          # shape (n_bars,)
+    std_corr  : np.ndarray          # shape (n_bars,)
+    per_sim_corr : np.ndarray       # shape (sims, n_bars)
+    sel_time_idx : list[int]        # time indices used for bars
+    """
+
+    def _safe_corr(a, b):
+        a = np.asarray(a).ravel()
+        b = np.asarray(b).ravel()
+        if a.size != b.size:
+            raise ValueError(f"Vectors must match in length, got {a.size} vs {b.size}.")
+        # handle constant vectors (std == 0 -> undefined corr)
+        if np.std(a) == 0 or np.std(b) == 0:
+            return np.nan
+        return np.corrcoef(a, b)[0, 1]
+
+    if data_3d.ndim != 3:
+        raise ValueError("data_3d must be 3D with shape (sims, time, neurons).")
+
+    sims, T, N = data_3d.shape
+    ref_time_idx = int(ref_time_idx)  # allow -1
+
+    # which time points to include as bars?
+    all_times = list(range(T))
+    if include_ref_bar:
+        sel_time_idx = all_times
+    else:
+        sel_time_idx = [t for t in all_times if t != (ref_time_idx % T)]
+
+    # compute per-sim correlations vs reference time
+    per_sim_corr = np.full((sims, len(sel_time_idx)), np.nan, dtype=float)
+    for s in range(sims):
+        ref_vec = data_3d[s, ref_time_idx, :]
+        for j, t in enumerate(sel_time_idx):
+            tgt_vec = data_3d[s, t, :]
+            per_sim_corr[s, j] = _safe_corr(ref_vec, tgt_vec)
+
+    mean_corr = np.nanmean(per_sim_corr, axis=0)
+    std_corr  = np.nanstd(per_sim_corr, axis=0)
+    sem_corr  = std_corr / np.sqrt(sims)
+
+    # x labels
+    if xlabels is None:
+        xlabels = [f"T{t}" for t in sel_time_idx]
+    else:
+        # sanity check: match bar count
+        if len(xlabels) != len(sel_time_idx):
+            raise ValueError(f"len(xlabels)={len(xlabels)} must equal number of bars={len(sel_time_idx)}.")
+
+    # colors
+    if bar_colors is None:
+        cmap = plt.get_cmap("tab20")
+        bar_colors = [cmap(i % cmap.N) for i in range(len(sel_time_idx))]
+
+    # plot
+    # breakpoint()
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(len(sel_time_idx))
+    ax.bar(x, mean_corr, yerr=sem_corr, capsize=capsize, alpha=0.9, edgecolor='black')
+
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.set_title(title, fontsize=font_size)
+    ax.set_xlabel("Time", fontsize=font_size)
+    ax.set_ylabel("Correlation ", fontsize=font_size)
+    ax.set_xticks(x, xlabels)
+    ax.tick_params(labelsize=tick_fontsize)
+    # ax.set_ylim(0, 0.8)
+    fig.tight_layout()
+
+    # save or show
+    try:
+        if fname is not None:
+            try:
+                save_plot(fname)  # if you have a helper
+            except NameError:
+                plt.savefig(fname, dpi=200)
+            plt.show()
+            plt.close(fig)
+        else:
+            plt.show()
+    except Exception:
+        # ensure we don't crash plotting in headless contexts
+        plt.close(fig)
+
+    return mean_corr, sem_corr, per_sim_corr, sel_time_idx
+
+
+def plot_first_activity_vs_active_sessions(
+    last_activity_all,              # shape: (sims, sessions, neurons)
+    threshold,                      # scalar threshold for "active"
+    first_session_idx=0,            # which session is "first"
+    mode="concat",                  # "concat" | "mean" | "median"
+    include_ref_in_count=True,      # if False, counts exclude the first session
+    exclude_sessions=None,          # iterable of session indices to ignore in counts (applied after include_ref_in_count)
+    fname=None,                     # optional save path
+    font_size=14,
+    tick_fontsize=12,
+    alpha=0.6,
+    show_linefit=True               # add least-squares fit line to scatter
+):
+    """
+    Plot first-session activity vs. number of sessions active (>threshold), excluding
+    neurons not active in the first session (per the chosen mode).
+
+    Modes:
+      - "concat": each point is a (sim, neuron) pair where the neuron is active in the
+                  first session for that sim.
+      - "mean":   one point per neuron, x/y are means across sims that had this neuron
+                  active in the first session.
+      - "median": same as mean, but uses medians.
+
+    Returns
+    -------
+    x_vals, y_vals : 1D arrays used in the scatter
+    r_pearson      : float (NaN if undefined)
+    """
+
+    if last_activity_all.ndim != 3:
+        raise ValueError("last_activity_all must be (sims, sessions, neurons)")
+
+    S, T, N = last_activity_all.shape
+    fs = first_session_idx % T
+
+    # Active mask; treat NaNs as not active (change if you prefer to drop NaN sims)
+    active = np.where(np.isnan(last_activity_all), False, last_activity_all > threshold)  # (S, T, N)
+
+    # Optionally exclude certain sessions from the count
+    keep_sessions = np.ones(T, dtype=bool)
+    if not include_ref_in_count:
+        keep_sessions[fs] = False
+    if exclude_sessions is not None:
+        for t in exclude_sessions:
+            keep_sessions[t % T] = False
+
+    # Counts of active sessions per (sim, neuron), with chosen session filtering
+    counts = active[:, keep_sessions, :].sum(axis=1)     # (S, N)
+
+    # First-session activity and activeness mask
+    first_activity = last_activity_all[:, fs, :]         # (S, N) raw activity
+    first_active   = active[:, fs, :]                    # (S, N) boolean
+
+    if mode == "concat":
+        # Keep only (sim, neuron) pairs active in first session for that sim
+        mask = first_active
+        x_vals = first_activity[mask]
+        y_vals = counts[mask]
+
+    elif mode in ("mean", "median"):
+        # Aggregate per neuron across sims where it's active in first session
+        x_vals = np.full(N, np.nan, dtype=float)
+        y_vals = np.full(N, np.nan, dtype=float)
+        for i in range(N):
+            m = first_active[:, i]
+            if not np.any(m):
+                continue  # neuron never active in first session in any sim -> drop
+            if mode == "mean":
+                x_vals[i] = np.nanmean(first_activity[m, i])
+                y_vals[i] = np.nanmean(counts[m, i])
+            else:  # "median"
+                x_vals[i] = np.nanmedian(first_activity[m, i])
+                y_vals[i] = np.nanmedian(counts[m, i])
+
+        sel = np.isfinite(x_vals) & np.isfinite(y_vals)
+        x_vals, y_vals = x_vals[sel], y_vals[sel]
+
+    else:
+        raise ValueError("mode must be 'concat', 'mean', or 'median'.")
+
+    # Scatter plot
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.scatter(x_vals, y_vals, alpha=alpha, edgecolors='none')
+
+    # Optional least-squares line (only if we have enough variation)
+    r_pearson = np.nan
+    if show_linefit and x_vals.size >= 2 and np.std(x_vals) > 0:
+        # Fit y = a*x + b
+        a, b = np.polyfit(x_vals, y_vals, deg=1)
+        xs = np.linspace(np.min(x_vals), np.max(x_vals), 200)
+        ys = a*xs + b
+        ax.plot(xs, ys, linewidth=2)
+
+        # Pearson r
+        if np.std(y_vals) > 0:
+            r_pearson = np.corrcoef(x_vals, y_vals)[0,1]
+
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.set_title("First-session activity vs. # sessions active", fontsize=font_size)
+    ax.set_xlabel("Activity in first session", fontsize=font_size)
+    ax.set_ylabel("# sessions active (> threshold)", fontsize=font_size)
+    ax.tick_params(labelsize=tick_fontsize)
+    ax.grid(True, linestyle='--', alpha=0.3)
+    fig.tight_layout()
+
+    if fname:
+        try:
+            save_plot(fname)  # if you have a helper
+        except NameError:
+            plt.savefig(fname, dpi=200)
+        plt.close(fig)
+    else:
+        plt.show()
+
+    return x_vals, y_vals, r_pearson
+
+def plot_sessions_count_vs_activity_sem(
+    last_activity_all,          # (sims, sessions, neurons)
+    threshold,                  # scalar threshold for "active"
+    first_session_idx=0,        # index of the 'first' session
+    include_ref_in_count=True,  # if False, counts exclude the first session
+    exclude_sessions=None,      # iterable of session indices to ignore in counts
+    activity_source='first',    # 'first' or callable(data_3d)->(S,N) custom per (sim,neuron) activity
+    sem_mode='pooled',          # 'pooled' or 'across_sims' (see docstring)
+    fname=None,                 # optional save path
+    font_size=14,
+    tick_fontsize=12,
+    capsize=5,
+    colors=None,
+    title="Activity in first session vs. # sessions active (mean ± SEM)"
+):
+    """
+    Makes a bar plot: x = number of sessions a neuron is active in (>threshold),
+    y = mean ± SEM of activity values, using only neurons active in the FIRST session.
+
+    activity_source:
+      - 'first' -> use first-session activity as y-values.
+      - callable -> function(data_3d)->(S,N) giving a per-(sim,neuron) y-value matrix.
+                    Example: lambda X: X[:, -1, :] for last-session activity.
+
+    sem_mode:
+      - 'pooled': SEM computed over all pooled (sim,neuron) samples for each count-bin.
+      - 'across_sims': compute mean within each simulation (per count-bin) then SEM across sims
+                       (sims without members in a bin are skipped for that bin).
+
+    Returns
+    -------
+    counts_unique : np.ndarray of shape (K,)  # the x tick values
+    mean_vals     : np.ndarray of shape (K,)
+    sem_vals      : np.ndarray of shape (K,)
+    n_per_bin     : np.ndarray of shape (K,)  # number of samples (pooled) or sims used (across_sims)
+    """
+
+    if last_activity_all.ndim != 3:
+        raise ValueError("last_activity_all must be (sims, sessions, neurons)")
+    S, T, N = last_activity_all.shape
+    fs = first_session_idx % T
+
+    # Active mask; treat NaNs as not active
+    active = np.where(np.isnan(last_activity_all), False, last_activity_all > threshold)  # (S, T, N)
+
+    # Only keep neurons active in FIRST session
+    first_active = active[:, fs, :]  # (S, N)
+
+    # Sessions to count
+    keep_sessions = np.ones(T, dtype=bool)
+    if not include_ref_in_count:
+        keep_sessions[fs] = False
+    if exclude_sessions is not None:
+        for t in exclude_sessions:
+            keep_sessions[t % T] = False
+
+    # Number of sessions active (with filtering), per (sim, neuron)
+    counts = active[:, keep_sessions, :].sum(axis=1)  # (S, N)
+
+    # y-values (activity)
+    if activity_source == 'first':
+        y_activity = last_activity_all[:, fs, :]      # (S, N)
+    elif callable(activity_source):
+        y_activity = activity_source(last_activity_all)
+        if y_activity.shape != (S, N):
+            raise ValueError("Custom activity_source must return shape (sims, neurons)")
+    else:
+        raise ValueError("activity_source must be 'first' or a callable")
+
+    # Apply mask: only include pairs active in FIRST session
+    mask = first_active
+    counts = counts[mask]          # 1D pooled counts per selected pair
+    y_vals = y_activity[mask]      # 1D pooled activity per selected pair
+
+    # Unique count bins (sorted)
+    counts_unique = np.unique(counts.astype(int))
+    # If you want to force a fixed range (e.g., 1..T), replace the line above with:
+    # counts_unique = np.arange(1 if include_ref_in_count else 0, keep_sessions.sum() + (1 if include_ref_in_count else 0))
+
+    mean_vals, sem_vals, n_per_bin = [], [], []
+
+    if sem_mode == 'pooled':
+        for k in counts_unique:
+            ys = y_vals[counts == k]
+            n = ys.size
+            m = np.nanmean(ys) if n else np.nan
+            s = np.nanstd(ys, ddof=1) / np.sqrt(n) if n > 1 else 0.0
+            mean_vals.append(m); sem_vals.append(s); n_per_bin.append(n)
+
+    elif sem_mode == 'across_sims':
+        # For each sim, compute mean activity of neurons (in that sim) with count == k & active in first
+        # Then compute grand mean and SEM across sims with non-empty bins.
+        # Build per-sim arrays
+        counts_sim = np.where(first_active, active[:, keep_sessions, :].sum(axis=1), np.nan)  # (S,N) with NaN where not first-active
+        y_sim = np.where(first_active, y_activity, np.nan)                                   # (S,N) with NaN where not first-active
+        for k in counts_unique:
+            # mean per sim for neurons with count k
+            means_per_sim = []
+            for s in range(S):
+                msk = np.isfinite(counts_sim[s]) & (counts_sim[s].astype(float) == float(k))
+                if np.any(msk):
+                    means_per_sim.append(np.nanmean(y_sim[s, msk]))
+            means_per_sim = np.array(means_per_sim, dtype=float)
+            n = means_per_sim.size
+            m = np.nanmean(means_per_sim) if n else np.nan
+            s = (np.nanstd(means_per_sim, ddof=1) / np.sqrt(n)) if n > 1 else 0.0
+            mean_vals.append(m); sem_vals.append(s); n_per_bin.append(n)
+    else:
+        raise ValueError("sem_mode must be 'pooled' or 'across_sims'")
+
+    counts_unique = counts_unique.astype(int)
+    mean_vals = np.array(mean_vals, dtype=float)
+    sem_vals  = np.array(sem_vals,  dtype=float)
+    n_per_bin = np.array(n_per_bin, dtype=int)
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(len(counts_unique))
+    if colors is None:
+        cmap = plt.get_cmap("tab20")
+        colors = [cmap(i % cmap.N) for i in range(len(counts_unique))]
+    ax.errorbar(x, mean_vals, yerr=sem_vals, capsize=capsize, alpha=0.9)
+
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.set_title(title, fontsize=font_size)
+    ax.set_xlabel("# sessions active (> threshold)", fontsize=font_size)
+    ax.set_ylabel("Activity (mean ± SEM)", fontsize=font_size)
+    ax.set_xticks(x, counts_unique)
+    ax.tick_params(labelsize=tick_fontsize)
+    ax.grid(True, axis='y', linestyle='--', alpha=0.35)
+    fig.tight_layout()
+
+    if fname:
+        try:
+            save_plot(fname)  # your helper, if present
+        except NameError:
+            plt.savefig(fname, dpi=200)
+        plt.close(fig)
+    else:
+        plt.show()
+
+    return counts_unique, mean_vals, sem_vals, n_per_bin
