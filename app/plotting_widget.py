@@ -120,7 +120,7 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
     save_plot(fname)
     plt.show()
     
-def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10):
+def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_fontsize=28, tick_fontsize=28, colorbar_fontsize=28):
     """
     Plots weight matrices from different time points in one row.
 
@@ -354,16 +354,19 @@ def plot_mean_std_corr_over_time(
     data_3d,
     ref_time_idx=0,
     xlabels=None,
-    title="Mean ± SD of neuron-ensemble correlation over time (across simulations)",
+    title="Mean ± SEM of neuron-ensemble correlation over time (across simulations)",
     fname=None,
     include_ref_bar=False,
-    bar_colors=None,
-    font_size=14,
-    tick_fontsize=12,
+    cmap="viridis",            # now accepts a colormap name or object
+    font_size=22,
+    tick_fontsize=22,
+    markersize = 10,
     capsize=5,
+    marker='o',
+    linewidth=3,
 ):
     """
-    Compute & plot mean ± sem of correlations over time across simulations.
+    Compute & plot mean ± sem of correlations over time across simulations (errorbar plot).
 
     Parameters
     ----------
@@ -373,29 +376,32 @@ def plot_mean_std_corr_over_time(
         The reference time index (e.g., 0 for Encoding, -1 for Recall).
         Correlations are computed: corr( data[s, ref_time_idx, :], data[s, t, :] ) for each sim s.
     xlabels : list[str] or None
-        Labels for the bars. If None, generated automatically.
-        If include_ref_bar=False, labels should correspond to time points excluding ref_time_idx.
+        Labels for the x-axis points. If None, generated automatically.
     title : str
         Plot title.
     fname : str or None
         If provided, saves to this path; else shows the plot.
     include_ref_bar : bool
-        If True, include the bar for the reference time (which will be 1.0 unless vectors are constant).
-    bar_colors : list or None
-        Custom colors for bars. If None, uses a categorical colormap.
+        If True, include the reference time point (usually 1.0 correlation).
+    cmap : str or matplotlib.colors.Colormap
+        Colormap for line or points.
     font_size : int
-        Font size for axis labels/title.
+        Font size for labels/title.
     tick_fontsize : int
         Font size for tick labels.
     capsize : int
-        Error bar capsize.
+        Error bar cap size.
+    marker : str
+        Marker style for points.
+    linewidth : float
+        Line width.
 
     Returns
     -------
-    mean_corr : np.ndarray          # shape (n_bars,)
-    std_corr  : np.ndarray          # shape (n_bars,)
-    per_sim_corr : np.ndarray       # shape (sims, n_bars)
-    sel_time_idx : list[int]        # time indices used for bars
+    mean_corr : np.ndarray
+    sem_corr  : np.ndarray
+    per_sim_corr : np.ndarray
+    sel_time_idx : list[int]
     """
 
     def _safe_corr(a, b):
@@ -403,7 +409,6 @@ def plot_mean_std_corr_over_time(
         b = np.asarray(b).ravel()
         if a.size != b.size:
             raise ValueError(f"Vectors must match in length, got {a.size} vs {b.size}.")
-        # handle constant vectors (std == 0 -> undefined corr)
         if np.std(a) == 0 or np.std(b) == 0:
             return np.nan
         return np.corrcoef(a, b)[0, 1]
@@ -412,22 +417,18 @@ def plot_mean_std_corr_over_time(
         raise ValueError("data_3d must be 3D with shape (sims, time, neurons).")
 
     sims, T, N = data_3d.shape
-    ref_time_idx = int(ref_time_idx)  # allow -1
+    ref_time_idx = int(ref_time_idx)
 
-    # which time points to include as bars?
+    # select time indices
     all_times = list(range(T))
-    if include_ref_bar:
-        sel_time_idx = all_times
-    else:
-        sel_time_idx = [t for t in all_times if t != (ref_time_idx % T)]
+    sel_time_idx = all_times if include_ref_bar else [t for t in all_times if t != (ref_time_idx % T)]
 
-    # compute per-sim correlations vs reference time
-    per_sim_corr = np.full((sims, len(sel_time_idx)), np.nan, dtype=float)
+    # compute correlations per simulation
+    per_sim_corr = np.full((sims, len(sel_time_idx)), np.nan)
     for s in range(sims):
         ref_vec = data_3d[s, ref_time_idx, :]
         for j, t in enumerate(sel_time_idx):
-            tgt_vec = data_3d[s, t, :]
-            per_sim_corr[s, j] = _safe_corr(ref_vec, tgt_vec)
+            per_sim_corr[s, j] = _safe_corr(ref_vec, data_3d[s, t, :])
 
     mean_corr = np.nanmean(per_sim_corr, axis=0)
     std_corr  = np.nanstd(per_sim_corr, axis=0)
@@ -436,36 +437,37 @@ def plot_mean_std_corr_over_time(
     # x labels
     if xlabels is None:
         xlabels = [f"T{t}" for t in sel_time_idx]
-    else:
-        # sanity check: match bar count
-        if len(xlabels) != len(sel_time_idx):
-            raise ValueError(f"len(xlabels)={len(xlabels)} must equal number of bars={len(sel_time_idx)}.")
+    elif len(xlabels) != len(sel_time_idx):
+        raise ValueError(f"len(xlabels)={len(xlabels)} must equal {len(sel_time_idx)}.")
 
-    # colors
-    if bar_colors is None:
-        cmap = plt.get_cmap("tab20")
-        bar_colors = [cmap(i % cmap.N) for i in range(len(sel_time_idx))]
+    # get color from cmap (e.g., central color of the range)
+    cm = plt.get_cmap(cmap)
+    color = cm(0.5)
 
-    # plot
-    # breakpoint()
+    # plot mean ± sem as errorbar line plot
     fig, ax = plt.subplots(figsize=(8, 4))
     x = np.arange(len(sel_time_idx))
-    ax.bar(x, mean_corr, yerr=sem_corr, capsize=capsize, alpha=0.9, edgecolor='black')
+    ax.errorbar(
+        x, mean_corr, yerr=sem_corr, fmt=marker + '-',
+        markersize=8, linewidth=linewidth, capsize=capsize,
+        color=color, ecolor=color, elinewidth=2, alpha=0.9
+    )
 
+    # styling
     ax.spines[["right", "top"]].set_visible(False)
     ax.set_title(title, fontsize=font_size)
     ax.set_xlabel("Time", fontsize=font_size)
-    ax.set_ylabel("Correlation ", fontsize=font_size)
+    ax.set_ylabel("PV Correlation", fontsize=font_size)
     ax.set_xticks(x, xlabels)
+    ax.set_ylim([-0.2,1])
     ax.tick_params(labelsize=tick_fontsize)
-    # ax.set_ylim(0, 0.8)
     fig.tight_layout()
 
     # save or show
     try:
         if fname is not None:
             try:
-                save_plot(fname)  # if you have a helper
+                save_plot(fname)
             except NameError:
                 plt.savefig(fname, dpi=200)
             plt.show()
@@ -473,10 +475,10 @@ def plot_mean_std_corr_over_time(
         else:
             plt.show()
     except Exception:
-        # ensure we don't crash plotting in headless contexts
         plt.close(fig)
 
     return mean_corr, sem_corr, per_sim_corr, sel_time_idx
+
 
 
 def plot_first_activity_vs_active_sessions(

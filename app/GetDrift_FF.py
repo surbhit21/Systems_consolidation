@@ -45,12 +45,12 @@ class twolayer_FF:
         """
         # calculating the input to the RNN
         input_vector = input_FR + self.rec_w @ self.rates
-        cont_inp = cont_INP + self.rec_w_cont @ self.cont_exc
+        cont_inp = cont_INP + self.rec_w_cont @ self.rates_cont
         # breakpoint()
         # print(input_vector.max())
         # blanket inhibition to the RNN
         I_inhib = self.I0 + self.I1 * torch.sum(self.rates) + self.I2 * torch.sum(self.rates**2)
-        I_inhib_cont = self.I0 + self.I1 * torch.sum(self.cont_exc) + self.I2 * torch.sum(self.cont_exc**2)
+        I_inhib_cont = self.I0 + self.I1 * torch.sum(self.rates_cont) + self.I2 * torch.sum(self.rates_cont**2)
 
 
         # print(I_inhib)
@@ -60,7 +60,7 @@ class twolayer_FF:
 
         # rate change as the nonlinear ODE
         dr_dt = (-self.rates +   self.act(self.excitability + input_current + self.act_threshold)) / self.tau
-        dr_dt_cont = (-self.rates_cont +   self.act(self.cont_exc + input_cont + + self.act_threshold_cont)) / self.tau
+        dr_dt_cont = (-self.rates_cont +   self.act(self.cont_exc + input_cont + self.act_threshold_cont)) / self.tau
 
         
         self.rates += (dr_dt * self.dt)
@@ -113,7 +113,7 @@ input_history = []
 #
 n = 140
 n_inp = 140
-n_cont = 5
+n_cont = 4
 E_fl = 1.8
 E_fe = 1.5
 E_ref = 0.7
@@ -122,8 +122,8 @@ off_set = 0
 
 # base_E[:off_set] += 2
 FC_inp = 25
-input = 19*torch.ones(n_inp)
-cont_inp = 11*torch.ones(n_cont)
+input = 20*torch.ones(n_inp)
+cont_inp = 12*torch.ones(n_cont)
 zero_cont_inp = torch.zeros(n_cont)
 # input[:10] = FC_inp
 off_input = input#18*torch.ones(n_inp)
@@ -136,7 +136,7 @@ zero_input = torch.zeros(n_inp)
 
 ID = 1000
 
-NUM_SIM = 100
+NUM_SIM = 1
 N_off_days = 7
 t_off = 100
 IR = 100
