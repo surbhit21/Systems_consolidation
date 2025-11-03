@@ -229,3 +229,28 @@ def average_firing_rates_with_active(firing_rates, T_FC, T_offline,T_ir, Nday, N
     active_neurons_recall = np.where(active_recall)[0]
     return avg_FC, active_neurons_FC, avg_days, active_neurons_days, avg_recall, active_neurons_recall
 
+def get_tagged_neurons(activity, threshold):
+    """
+    Return indices of neurons whose activity exceeds threshold at any time.
+
+    Parameters
+    ----------
+    activity : np.ndarray
+        Shape (N, T) — neurons × time.
+    threshold : float
+        Threshold for tagging.
+
+    Returns
+    -------
+    tagged_indices : np.ndarray
+        1D array of indices of neurons that were ever above threshold.
+    """
+    # Boolean array (N,)
+    N,T = activity.shape
+    tagged_mask = np.any(activity > threshold, axis=1)
+    
+    # Indices of tagged neurons
+    tagged_indices = np.where(tagged_mask)[0]
+    
+    untagged_neurons = [i for i in range(N) if i not in tagged_indices]
+    return tagged_indices,untagged_neurons

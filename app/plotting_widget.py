@@ -85,7 +85,7 @@ def plot_activities(activity1, activity2, title,var_name, fname, color1='red', c
     # save_plot(fname)  # Uncomment if saving is needed
     plt.show()
     
-def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize=14, tick_fontsize=10, colorbar_fontsize=10,plot_title =""):
+def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize=14, tick_fontsize=26, colorbar_fontsize=10,plot_title ="",com = None):
     """
     Plots weight matrices from different time points in one row.
 
@@ -97,10 +97,10 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
     """
     # breakpoint()
     num_plots = len(weights)
-    fig = plt.figure(figsize=(5 * num_plots, 5))
+    fig = plt.figure(figsize=(4 * num_plots, 4))
     gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
-    vmin = min(w.min() for w in weights)
-    vmax = max(w.max() for w in weights)
+    vmin = 0#min(w.min() for w in weights)
+    vmax = 1#max(w.max() for w in weights)
     # im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto', vmin=vmin, vmax=vmax)
     ims = []
     for idx, (w, title) in enumerate(zip(weights, titles)):
@@ -110,12 +110,21 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
         ims.append(im)
         ax.set_title(title, fontsize=title_fontsize)
         ax.tick_params(labelsize=tick_fontsize)
+        n = w.shape[0]
+        if com:
+            x_coords, y_coords = np.meshgrid(np.arange(n), np.arange(n), indexing='ij')
+            x_com = np.sum(x_coords * w) / np.sum(w)
+            y_com = np.sum(y_coords * w) / np.sum(w)
+            print(x_com,y_com)
+            ax.scatter(y_com, x_com, color='red', s=100, edgecolors='white', label='Center of Mass')
 
     # Shared colorbar
     cax = fig.add_subplot(gs[0, -1])
     cbar = fig.colorbar(ims[0], cax=cax)
-    cbar.ax.tick_params(labelsize=colorbar_fontsize)
-    # plt.title(plot_title, fontsize=title_fontsize)
+    
+    cbar.ax.tick_params(labelsize=tick_fontsize)
+
+    # plt.title(plot_title, fontsize=tick_fontsize)
     plt.tight_layout()
     save_plot(fname)
     plt.show()
@@ -364,6 +373,7 @@ def plot_mean_std_corr_over_time(
     capsize=5,
     marker='o',
     linewidth=3,
+    bar_plot = False
 ):
     """
     Compute & plot mean ± sem of correlations over time across simulations (errorbar plot).
@@ -395,6 +405,8 @@ def plot_mean_std_corr_over_time(
         Marker style for points.
     linewidth : float
         Line width.
+    barplot: bool
+        plot as barplot or errorbar
 
     Returns
     -------
@@ -442,16 +454,21 @@ def plot_mean_std_corr_over_time(
 
     # get color from cmap (e.g., central color of the range)
     cm = plt.get_cmap(cmap)
-    color = cm(0.5)
+    
 
     # plot mean ± sem as errorbar line plot
     fig, ax = plt.subplots(figsize=(8, 4))
     x = np.arange(len(sel_time_idx))
-    ax.errorbar(
-        x, mean_corr, yerr=sem_corr, fmt=marker + '-',
-        markersize=8, linewidth=linewidth, capsize=capsize,
-        color=color, ecolor=color, elinewidth=2, alpha=0.9
-    )
+    if bar_plot:
+        colors = [cm(i / T) for i in range(T)]
+        ax.bar( x, mean_corr, yerr = sem_corr,color=colors)
+    else:
+        color = cm(0.5)
+        ax.errorbar(
+            x, mean_corr, yerr=sem_corr, fmt=marker + '-',
+            markersize=8, linewidth=linewidth, capsize=capsize,
+            color=color, ecolor=color, elinewidth=2, alpha=0.9
+        )
 
     # styling
     ax.spines[["right", "top"]].set_visible(False)
@@ -459,7 +476,8 @@ def plot_mean_std_corr_over_time(
     ax.set_xlabel("Time", fontsize=font_size)
     ax.set_ylabel("PV Correlation", fontsize=font_size)
     ax.set_xticks(x, xlabels)
-    ax.set_ylim([-0.2,1])
+    y_min = mean_corr.min() - sem_corr.max()
+    ax.set_ylim([-0.1,1])
     ax.tick_params(labelsize=tick_fontsize)
     fig.tight_layout()
 
@@ -740,3 +758,103 @@ def plot_sessions_count_vs_activity_sem(
         plt.show()
 
     return counts_unique, mean_vals, sem_vals, n_per_bin
+
+def plot_firing_rate(timepoints, firing_rate, lab, fname = None,
+                     xlabel="Time", ylabel="Firing Rate (Hz)", 
+                     c="r", threshold=8, ticksize=26):
+    """
+    Plot firing rate over time with an active threshold line.
+
+    Parameters:
+        timepoints : array-like
+            Time axis values.
+        firing_rate : array-like
+            Firing rate values to plot.
+        xlabel, ylabel : str
+            Axis labels.
+        color : str
+            Color for the firing rate curve.
+        threshold : float
+            y-value for the horizontal dashed threshold line.
+        ticksize : int
+            Font size for axis ticks.
+    """
+    fig, ax = plt.subplots(figsize=(8, 4))
+    plt.plot(timepoints, firing_rate, label=lab, color=c)
+    plt.hlines(y=threshold, xmin=timepoints[0], xmax=timepoints[-1],
+               colors='k', linestyles=':', label="active threshold")
+    
+    plt.xlabel(xlabel, fontsize=ticksize+2)
+    plt.ylabel(ylabel, fontsize=ticksize+2)
+    plt.tick_params(axis='both', which='major', labelsize=ticksize)
+    plt.legend(fontsize=ticksize)
+    plt.tight_layout()
+    plt.ylim([-2,22])
+    if fname:
+        try:
+            save_plot(fname)  # your helper, if present
+        except NameError:
+            plt.savefig(fname, dpi=200)
+        plt.close(fig)
+    else:
+        plt.show()
+    plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_tagged_activity(activity, threshold, method='mean'):
+    """
+    Plot average activity of tagged vs non-tagged neurons over time.
+
+    Parameters
+    ----------
+    activity : np.ndarray
+        Shape (N, T) matrix (neurons × time)
+    threshold : float
+        Threshold for tagging neurons.
+    method : {'mean', 'max', 'median'}, optional
+        How to determine tagging. Default is 'mean'.
+    """
+
+    N, T = activity.shape
+
+    # --- Decide tagging based on chosen method ---
+    if method == 'mean':
+        tag_metric = activity.mean(axis=1)
+    elif method == 'max':
+        tag_metric = activity.max(axis=1)
+    elif method == 'median':
+        tag_metric = np.median(activity, axis=1)
+    else:
+        raise ValueError("method must be 'mean', 'max', or 'median'")
+
+    tagged_neurons = tag_metric >= threshold
+    non_tagged_neurons = ~tagged_neurons
+
+    # --- Compute average activity over time ---
+    tagged_activity = activity[tagged_neurons].mean(axis=0)
+    non_tagged_activity = activity[non_tagged_neurons].mean(axis=0)
+
+    # --- Plot ---
+    plt.figure(figsize=(10, 5))
+    plt.plot(tagged_activity, label=f"Tagged (n={tagged_neurons.sum()})", color="tab:blue", linewidth=2)
+    plt.plot(non_tagged_activity, label=f"Non-tagged (n={non_tagged_neurons.sum()})", color="tab:gray", linewidth=2)
+    plt.xlabel("Time")
+    plt.ylabel("Activity")
+    plt.title(f"Average activity over time — threshold={threshold}, method={method}")
+    plt.legend(frameon=False)
+    plt.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    return tagged_neurons, tagged_activity, non_tagged_activity
+
+
+# --- Example usage ---
+# Random data example
+# N = 50  # neurons
+# T = 200 # timepoints
+# activity = np.random.rand(N, T)
+# threshold = 0.6
+# plot_tagged_activity(activity, threshold, method='mean')

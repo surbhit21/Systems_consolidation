@@ -31,7 +31,8 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     include_ref_bar=False,
     title="Cell population \n activity correlation",
     fname="./plots/Reimagined3/encoding_vs_others_mean_std.png",
-    cmap="Reds"
+    cmap="Reds",
+    bar_plot=True
 )
 
 xlabs = ["FC", "Off 1","Off 2","Off 3","Off 4","Off 5"]
@@ -44,7 +45,8 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     include_ref_bar=False,
     title="Cell population \n activity correlation",
     fname="./plots/Reimagined3/recall_vs_others_mean_std.png",
-    cmap="Reds"
+    cmap="Reds",
+    bar_plot=True
 
 )
 
@@ -61,7 +63,8 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     include_ref_bar=False,
     title="Cell population \n activity correlation",
     fname="./plots/Reimagined3/encoding_vs_offline_mean_std.png",
-    cmap="Reds"
+    cmap="Reds",
+    bar_plot=True
 )
 
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5"]
@@ -74,7 +77,8 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     include_ref_bar=False,
     title="Cell population \n activity correlation",
     fname="./plots/Reimagined3/recall_vs_offline_mean_std.png",
-    cmap="Reds"
+    cmap="Reds",
+    bar_plot=True
 
 )
 

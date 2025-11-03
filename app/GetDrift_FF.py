@@ -136,7 +136,7 @@ zero_input = torch.zeros(n_inp)
 
 ID = 1000
 
-NUM_SIM = 1
+NUM_SIM = 15
 N_off_days = 7
 t_off = 100
 IR = 100
@@ -288,7 +288,8 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     include_ref_bar=False,
     title="Encoding vs. others (mean ± SD across sims)",
     fname="./plots/Reimagined3/encoding_vs_others_mean_std.png",
-    bar_colors = cbars[1:last_activity_all.shape[0]+1]
+    bcmap="Reds",
+    bar_plot=True
 )
 
 xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
@@ -301,7 +302,8 @@ last_activity_all, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     include_ref_bar=False,
     title="Encoding vs. others (mean ± SD across sims)",
     fname="./plots/Reimagined3/recall_vs_others_mean_std.png",
-    bar_colors = cbars[:last_activity_all.shape[0]]
+    bcmap="Reds",
+    bar_plot=True
 
 )
 

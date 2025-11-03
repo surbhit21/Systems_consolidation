@@ -1,22 +1,28 @@
 import numpy as np
-from plotting_widget import plot_mean_std_corr_over_time, plot_activity_n_excitability_time,plot_first_activity_vs_active_sessions,plot_sessions_count_vs_activity_sem
+from plotting_widget import *
 import matplotlib.pyplot as plt
 # import
 threshold = 2
-input_data_folder = "./data/Reimagined4"
-op_plots_folder = "./plots/Reimagined4"
+input_data_folder = "./data/Reimagined8"
+op_plots_folder = "./plots/Reimagined8"
 last_activity_all = np.load("{}/last_activity.npy".format(input_data_folder)) # shape: (sims, time, neurons)
 FR_history_all = np.load("{}/FR_history.npy".format(input_data_folder)) # shape: (sims, time, neurons)
 EX_history_all = np.load("{}/EX_history.npy".format(input_data_folder)) # shape:
-
+FR_op_history_all = np.load("{}/FR_history_op.npy".format(input_data_folder))
 last_activity_all_ctx = np.load("{}/last_activity_ctx.npy".format(input_data_folder)) # shape: (sims, time, neurons)
 FR_history_all_ctx = np.load("{}/FR_history_ctx.npy".format(input_data_folder)) # shape: (sims, time, neurons)
-EX_history_all_ctx = np.load("{}/EX_history_ctx.npy".format(input_data_folder)) # shape:
-
+EX_history_all_ctx = np.load("{}/EX_history_ctx.npy".format(input_data_folder)) # shape: 
+rec_weights_all = np.load("{}/rec_weights.npy".format(input_data_folder))
+rec_ctx_weights_all = np.load("{}/rec_ctx_weights.npy".format(input_data_folder))
 FR_history_th = (FR_history_all > threshold).astype(float)*FR_history_all
 FR_history_th_ctx = (FR_history_all_ctx > threshold).astype(float)*FR_history_all_ctx
-
+last_activity_th = (last_activity_all > threshold).astype(float)*last_activity_all
+last_activity_th_ctx = (last_activity_all_ctx > threshold).astype(float)*last_activity_all_ctx
 breakpoint()
+total_time = 15000
+timepoints = np.arange(0,total_time,1)*1
+plot_firing_rate(timepoints, FR_op_history_all[0, :, 0],lab = "Output neuron",
+                 xlabel="Time (s)", ylabel="Firing Rate (Hz)", c="r",fname= "{}/OP_neuron_activity.svg".format(op_plots_folder))
 # breakpoint()
 plot_activity_n_excitability_time([FR_history_th[0].T,EX_history_all[0].T],
                        titles=['Neuronal Activity',
@@ -39,7 +45,7 @@ xlabs = ["Day 1","Day 2","Day 3","Day 4"]
 Title = "Ensemble similarity"
 # plot_row_correlations(last_activity[0,0],last_activity[0,1:], xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.svg", use_bar_plot=True)
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all ,                # shape: (sims, time, neurons)
+    last_activity_th ,                # shape: (sims, time, neurons)
     ref_time_idx=0,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=False,
@@ -50,7 +56,7 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
 )
 
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all_ctx ,                # shape: (sims, time, neurons)
+    last_activity_th_ctx ,                # shape: (sims, time, neurons)
     ref_time_idx=0,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=False,
@@ -63,7 +69,7 @@ xlabs = ["FC", "Day 1","Day 2","Day 3"]
 Title = "Ensemble similarity"
 # plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.svg", use_bar_plot=True)
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all,                # shape: (sims, time, neurons)
+    last_activity_th,                # shape: (sims, time, neurons)
     ref_time_idx=-1,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=False,
@@ -75,7 +81,7 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
 )
 
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all_ctx,                # shape: (sims, time, neurons)
+    last_activity_th_ctx,                # shape: (sims, time, neurons)
     ref_time_idx=-1,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=False,
@@ -86,56 +92,56 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
 
 )
 
-cbars = ["fff5f0ff","fdcab5ff","fc8a6aff","f96044ff","e83429ff","c3161bff","980c13ff",]
-xlabs = ["Off 1","Off 2","Off 3"]
-Title = "Ensemble similarity"
-# breakpoint()
-# plot_row_correlations(last_activity[0,0],last_activity[0,1:], xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.svg", use_bar_plot=True)
-mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all[:,:-1,:] ,                # shape: (sims, time, neurons)
-    ref_time_idx=0,         # Encoding
-    xlabels=xlabs,         # must match number of non-ref times
-    include_ref_bar=False,
-    title="Cell population \n activity correlation",
-    fname="{}/encoding_vs_offline_mean_std.svg".format(op_plots_folder),
-    cmap = "Oranges",
-    marker = "^"
-)
-mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all_ctx[:,:-1,:] ,                # shape: (sims, time, neurons)
-    ref_time_idx=0,         # Encoding
-    xlabels=xlabs,         # must match number of non-ref times
-    include_ref_bar=False,
-    title="Cell population \n activity correlation",
-    fname="{}/encoding_vs_offline_mean_std_ctx.svg".format(op_plots_folder),
-    cmap = "Greens"
-)
+# cbars = ["fff5f0ff","fdcab5ff","fc8a6aff","f96044ff","e83429ff","c3161bff","980c13ff",]
+# xlabs = ["Off 1","Off 2","Off 3"]
+# Title = "Ensemble similarity"
+# # breakpoint()
+# # plot_row_correlations(last_activity[0,0],last_activity[0,1:], xlabs=xlabs,title=Title,fname="./plots/Reimagined/encoding_corr.svg", use_bar_plot=True)
+# mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
+#     last_activity_all[:,:-1,:] ,                # shape: (sims, time, neurons)
+#     ref_time_idx=0,         # Encoding
+#     xlabels=xlabs,         # must match number of non-ref times
+#     include_ref_bar=False,
+#     title="Cell population \n activity correlation",
+#     fname="{}/encoding_vs_offline_mean_std.svg".format(op_plots_folder),
+#     cmap = "Oranges",
+#     marker = "^"
+# )
+# mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
+#     last_activity_all_ctx[:,:-1,:] ,                # shape: (sims, time, neurons)
+#     ref_time_idx=0,         # Encoding
+#     xlabels=xlabs,         # must match number of non-ref times
+#     include_ref_bar=False,
+#     title="Cell population \n activity correlation",
+#     fname="{}/encoding_vs_offline_mean_std_ctx.svg".format(op_plots_folder),
+#     cmap = "Greens"
+# )
 
 xlabs = ["Off 1","Off 2","Off 3"]
-Title = "Ensemble similarity"
-# plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.svg", use_bar_plot=True)
-mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all[:,1:,:],                # shape: (sims, time, neurons)
-    ref_time_idx=-1,         # Encoding
-    xlabels=xlabs,         # must match number of non-ref times
-    include_ref_bar=False,
-    title="Cell population \n activity correlation",
-    fname="{}/recall_vs_offline_mean_std.svg".format(op_plots_folder),
-    cmap = "Oranges",
-    marker = "^"
+# Title = "Ensemble similarity"
+# # plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.svg", use_bar_plot=True)
+# mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
+#     last_activity_all[:,1:,:],                # shape: (sims, time, neurons)
+#     ref_time_idx=-1,         # Encoding
+#     xlabels=xlabs,         # must match number of non-ref times
+#     include_ref_bar=False,
+#     title="Cell population \n activity correlation",
+#     fname="{}/recall_vs_offline_mean_std.svg".format(op_plots_folder),
+#     cmap = "Oranges",
+#     marker = "^"
 
-)
+# )
 
-mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_all_ctx[:,1:,:],                # shape: (sims, time, neurons)
-    ref_time_idx=-1,         # Encoding
-    xlabels=xlabs,         # must match number of non-ref times
-    include_ref_bar=False,
-    title="Cell population \n activity correlation",
-    fname="{}/recall_vs_offline_mean_std_ctx.svg".format(op_plots_folder),
-    cmap = "Greens"
+# mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
+#     last_activity_all_ctx[:,1:,:],                # shape: (sims, time, neurons)
+#     ref_time_idx=-1,         # Encoding
+#     xlabels=xlabs,         # must match number of non-ref times
+#     include_ref_bar=False,
+#     title="Cell population \n activity correlation",
+#     fname="{}/recall_vs_offline_mean_std_ctx.svg".format(op_plots_folder),
+#     cmap = "Greens"
 
-)
+# )
 
 S, T, N = last_activity_all.shape
 
@@ -199,3 +205,14 @@ counts_x, mean_y, sem_y, n = plot_sessions_count_vs_activity_sem(
     sem_mode='pooled',
     fname="{}/first_act_vs_sessions_pooled.svg".format(op_plots_folder)
 )
+labs = ["Encoding","Day 1","Day 2","Day 3","Day 4"]
+plot_weights_over_time(rec_weights_all[0],
+                       titles=  labs,
+                       fname="{}/Rec_w.svg".format(op_plots_folder),
+                       cmaps='gray_r')
+
+plot_weights_over_time(rec_ctx_weights_all[0],
+                       titles=  labs,
+                       fname="{}/Rec_w_ctx.svg".format(op_plots_folder),
+                       cmaps='gray_r')
+
