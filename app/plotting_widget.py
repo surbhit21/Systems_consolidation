@@ -477,7 +477,7 @@ def plot_mean_std_corr_over_time(
     ax.set_ylabel("PV Correlation", fontsize=font_size)
     ax.set_xticks(x, xlabels)
     y_min = mean_corr.min() - sem_corr.max()
-    ax.set_ylim([-0.1,1])
+    # ax.set_ylim([-0.1,1])
     ax.tick_params(labelsize=tick_fontsize)
     fig.tight_layout()
 
