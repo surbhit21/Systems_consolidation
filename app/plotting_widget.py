@@ -99,8 +99,8 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
     num_plots = len(weights)
     fig = plt.figure(figsize=(4 * num_plots, 4))
     gs = gridspec.GridSpec(1, num_plots + 1, width_ratios=[1] * num_plots + [0.05], wspace=0.3)
-    vmin = 0#min(w.min() for w in weights)
-    vmax = 1#max(w.max() for w in weights)
+    vmin = min(w.min() for w in weights)
+    vmax = max(w.max() for w in weights)
     # im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto', vmin=vmin, vmax=vmax)
     ims = []
     for idx, (w, title) in enumerate(zip(weights, titles)):
