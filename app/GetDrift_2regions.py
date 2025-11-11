@@ -38,7 +38,8 @@ class twolayer_FF:
         self.FB_CTX_MTL = torch.zeros(self.n_MTL)
         self.gain_ctx = 1
         self.op_neuron = 1
-        
+        self.on = 1.0  # plasticity on/off
+        self.on_ctx = 1.0
         # Initialize random input weights
         self.input_w = torch.abs(torch.normal(0,0.05,size=(n_inp,n_MTL)))
         # self.input_w = torch.clamp(self.input_w, 0.0, 0.1)
@@ -55,11 +56,11 @@ class twolayer_FF:
     def TurnOFF_FB(self):
         self.FB_CTX_MTL = 0.#torch.zeros_like(self.FB_CTX_MTL)
     def TurnON_FB(self):
-        self.FB_CTX_MTL = 0.#*torch.ones_like(self.FB_CTX_MTL)
+        self.FB_CTX_MTL = 0.1#*torch.ones_like(self.FB_CTX_MTL)
     def TurnOFF_FF(self):
         self.FF_MTL_CTX = 0.#torch.zeros_like(self.FF_MTL_CTX)
     def TurnON_FF(self):
-        self.FF_MTL_CTX = 0.#*torch.ones_like(self.FF_MTL_CTX)
+        self.FF_MTL_CTX = 1.#*torch.ones_like(self.FF_MTL_CTX)
 
     def step(self, input_FR, op_signal = 0):
         """
@@ -100,7 +101,7 @@ class twolayer_FF:
         # post_mask = (self.rates > self.threshold).float()
         post_mask = self.rates > self.plas_threshold
         # hebbian plasticity in RNN weights
-        hebbian_dw = self.lr * torch.outer(self.rates*post_mask, self.rates*post_mask) * self.dt
+        hebbian_dw = self.on*self.lr * torch.outer(self.rates*post_mask, self.rates*post_mask) * self.dt
         decay = self.decay_r * self.rec_w * self.dt
 
 
@@ -118,7 +119,7 @@ class twolayer_FF:
 
 
         post_mask = self.rates_ctx > self.plas_threshold
-        hebbian_dw_ctx = self.lr_ctx * torch.outer(self.rates_ctx*post_mask, self.rates_ctx*post_mask) * self.dt
+        hebbian_dw_ctx = self.on_ctx * self.lr_ctx * torch.outer(self.rates_ctx*post_mask, self.rates_ctx*post_mask) * self.dt
         decay_ctx = self.decay_r_ctx * self.rec_w_ctx * self.dt
         self.rec_w_ctx += (hebbian_dw_ctx - decay_ctx)
         
@@ -128,6 +129,7 @@ class twolayer_FF:
         sum_w = torch.sum(self.ctx_op_w)
         self.ctx_op_w /= sum_w
         self.ctx_op_w = torch.clamp(self.ctx_op_w,min=0)
+        
         # hebbian plasticity in RNN weights
         # hebbian_dw_inp = self.lr * torch.outer(input_FR,self.rates*post_mask ) * self.dt
         # decay_inp = self.decay_r*0.1 * self.input_w * self.dt
@@ -172,7 +174,7 @@ threshold = 2
 off_set = 0
 
 # base_E[:off_set] += 2
-sim_name = "Reimagined11"
+sim_name = "Reimagined16"
 notes = "trying with Feedback and feedforward connection of equal strength"
 FC_inp = 18
 input = FC_inp*torch.ones(n_inp)
@@ -200,6 +202,7 @@ rec_ctx_weights_all = []
 FR_ctx_history_all = []
 last_activity_ctx_all = []
 FR_op_history_all = []
+dop = 5
 for i in trange(NUM_SIM):
     total_time = 0
     torch.manual_seed(start_seed + i)
@@ -232,7 +235,7 @@ for i in trange(NUM_SIM):
     nn.excitability[off_set+(day)*20:off_set+(day)*20+20] += E_fl
     nn.excitability = torch.clip(nn.excitability,0,max_e)
     nn.excitability_ctx  = base_e_ctx.clone()
-    nn.excitability_ctx[n_ctx - (off_set+(day)*20+20):n_ctx - (off_set+(day)*20)] += E_fl_ctx
+    nn.excitability_ctx[(off_set+(day)*20): (off_set+(day)*20+20)] += E_fl_ctx
     nn.excitability_ctx = torch.clip(nn.excitability_ctx,0,max_e)
     for t in range(ID):
         next_FR,FR_ctx,FR_op = nn.step(zero_input,0)
@@ -245,6 +248,7 @@ for i in trange(NUM_SIM):
     for day in range(N_off_days):
         day_activity = []
         day_activity_ctx = []
+
         # torch.manual_seed(120+day)
         # base_E = torch.abs(torch.normal(mu_ex,sigma_ex,size=(n,)))
         # base_e_ctx = torch.abs(torch.normal(mu_ex,sigma_ex,size=(n_ctx,)))
@@ -252,7 +256,7 @@ for i in trange(NUM_SIM):
         nn.excitability[off_set+(day)*20:off_set+(day)*20+20] += E_fl
         nn.excitability = torch.clip(nn.excitability,0,max_e)
         nn.excitability_ctx  = base_e_ctx.clone()
-        nn.excitability_ctx[n_ctx - (off_set+(day)*20+20):n_ctx - (off_set+(day)*20)] += E_fl_ctx
+        nn.excitability_ctx[(off_set+(day)*20):(off_set+(day)*20 + 20)] += E_fl_ctx
         nn.excitability_ctx = torch.clip(nn.excitability_ctx,0,max_e)
         inp_to_network = input                
         # if day == 1:
@@ -262,13 +266,19 @@ for i in trange(NUM_SIM):
         #     nn.TurnON_FB()
         #     nn.TurnON_FF()
         if day == 0:
-            op_learning = 1
+            op_learning = 1.0
         else:
-            op_learning = 0
+            op_learning = 0.0
         
         for rep in range(Nrep):
-            nn.TurnON_FB()
-            nn.TurnON_FF()
+            if dop-1 < day < day + 1:
+                nn.TurnON_FB()
+                nn.TurnON_FF()
+                nn.on_ctx = 1.0
+            else:
+                nn.TurnOFF_FB()
+                nn.TurnOFF_FF()
+                nn.on_ctx = 0.0
             total_time += t_off
             for t in range(t_off):
                 next_FR,FR_ctx,FR_op = nn.step(inp_to_network,op_learning)

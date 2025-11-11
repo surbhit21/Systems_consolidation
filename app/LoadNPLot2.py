@@ -2,11 +2,11 @@ import numpy as np
 from plotting_widget import *
 import matplotlib.pyplot as plt
 import json
-input_data_folder = "./data/Reimagined11"
-op_plots_folder = "./plots/Reimagined11"
+input_data_folder = "./data/Reimagined13"
+op_plots_folder = "./plots/Reimagined13"
 # Path to your JSON file
 json_path = "{}/all_params.json".format(input_data_folder)
-
+dop = 2
 with open(json_path, "r") as f:
     sim_params = json.load(f)
 
@@ -81,18 +81,6 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     cmap = "Oranges",
     marker = "^"
 )
-
-xlabs = [f"{i-1}" for i in range(N_off_days)]
-mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-    last_activity_th ,                # shape: (sims, time, neurons)
-    ref_time_idx=1,         # Encoding
-    xlabels=xlabs,         # must match number of non-ref times
-    include_ref_bar=True,
-    title="Cell population \n activity correlation",
-    fname="{}/off1_vs_others_mean_std.svg".format(op_plots_folder),
-    cmap = "Oranges",
-    marker = "^"
-)
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     last_activity_th_ctx ,                # shape: (sims, time, neurons)
     ref_time_idx=0,         # Encoding
@@ -103,9 +91,21 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     cmap = "Greens"
 )
 
+xlabs = [f"{i-dop}" for i in range(N_off_days)]
+mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
+    last_activity_th ,                # shape: (sims, time, neurons)
+    ref_time_idx=dop,         # Encoding
+    xlabels=xlabs,         # must match number of non-ref times
+    include_ref_bar=True,
+    title="Cell population \n activity correlation",
+    fname="{}/off1_vs_others_mean_std.svg".format(op_plots_folder),
+    cmap = "Oranges",
+    marker = "^"
+)
+
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     last_activity_th_ctx ,                # shape: (sims, time, neurons)
-    ref_time_idx=1,         # Encoding
+    ref_time_idx=dop,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=True,
     title="Cell population \n activity correlation",
@@ -113,7 +113,7 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     cmap = "Greens"
 )
 
-xlabs = [f"{i-1}" for i in range(N_off_days)]
+xlabs = [f"{i}" for i in range(N_off_days)]
 Title = "Ensemble similarity"
 # plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined//Recall_corr.svg", use_bar_plot=True)
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(

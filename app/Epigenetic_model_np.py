@@ -41,8 +41,9 @@ class twolayer_FF:
         # synaptic variables
         self.tau_lr_0 = tau_lr0
         self.tau_lr_i = tau_lr0#np.full(n_neurons, float(tau_lr0), dtype=float)
+        self.e_tau_decay = 3500
         self.tau_decay = tau_decay
-        self.beta_w = 0.9
+        # self.beta_w = 0.9
 
         # global inhibition
         self.I0 = float(I0)
@@ -66,6 +67,9 @@ class twolayer_FF:
         self.prune_prob =0.2
         self.M = np.ones((n_neurons, n_neurons), dtype=float)
 
+        self.tag_ij = np.zeros((self.n_neurons,self.n_neurons), dtype=float)
+        self.tag_theta = 3e-3
+
     def prune_below_threshold_prob(self, threshold=0.05, p_prune=0.5):
         """
         If a synaptic weight falls below `threshold`, it has probability `p_prune`
@@ -87,8 +91,16 @@ class twolayer_FF:
         self.M[to_prune] = 0.0
         self.rec_w[to_prune] = 0.0
 
+
+        
         return int(np.sum(to_prune))  # return number of pruned synapses
 
+    def check_LateLTP(self):
+        """
+        Check which neurons have crossed the late LTP threshold and set is_long_term accordingly.
+        """
+        late_LTP_threshold = 1.5
+        self.is_long_term = (self.alpha >= late_LTP_threshold).astype(float)
 
     def step(self,ct,ctx1,ctx2,seq1,seq2,seed = 0):
         """
@@ -110,6 +122,9 @@ class twolayer_FF:
         input_vector = input_FR + self.rec_w.dot(self.rates)
         self.rates = self.rates*(self.rates>1e-5)
         # global inhibition
+        if np.isnan(self.rec_w).any():
+            breakpoint()
+            print("rec_w max >",self.rec_w.max(), ct)
         r = self.rates
         sum_r = float(np.sum(r))                           # scalar
         sum_r_pos = np.sum(np.multiply(np.maximum(0,r),r))
@@ -132,10 +147,17 @@ class twolayer_FF:
 
         # hebbian plasticity in recurrent weights
         op_prod = np.outer(self.rates, self.rates)
-        if ct == 2023:
-            print("op_prod",op_prod.shape)
         w_noise = np.random.normal(0.0, 0.001, size=(self.n_neurons, self.n_neurons))
-        dWdt = (1 + self.scaleW * self.alpha) * (self.rates >= self.theta) * self.rates.dot(self.rates.T) / self.tau_lr_0  + (self.rates < self.theta) * self.rates.dot(self.rates.T) / self.tau_lr_0 - self.rec_w/self.tau_decay + (self.noise_scale*w_noise)
+        dWdt = (1 + self.scaleW * self.alpha) * (self.rates >= self.theta) * self.rates.dot(self.rates.T) / self.tau_lr_0  + (self.rates < self.theta) * self.rates.dot(self.rates.T) / self.tau_lr_0  #+ (self.noise_scale*w_noise)
+        
+
+        dWdt -= (1.0 / (((1.0-self.tag_ij) * self.e_tau_decay) + (self.tag_ij * self.tau_decay))) * self.rec_w
+        self.tag_ij = (dWdt > self.tag_theta).astype(float) + self.tag_ij
+        self.tag_ij = np.clip(self.tag_ij, 0.0, 1.0)
+        # breakpoint()
+        # if 2433 < ct < 2438:
+        #     breakpoint()
+        #     print("op_prod",op_prod.shape)
         dWdt = np.multiply(dWdt,np.logical_not(np.logical_or(np.logical_and(self.rec_w>=self.max_w,dWdt>0),np.logical_and(self.rec_w<=0,dWdt<0))))
         # dw_dt = dWdt + self.noise_scale*noise
         # gate_post = (self.rates >= self.theta).astype(float)[:, None]          # (N,1)
@@ -149,6 +171,7 @@ class twolayer_FF:
 
         # change in priming variable
         # breakpoint()
+        # self.check_LateLTP()
         dalpha_dt = np.zeros((self.n_neurons,1))
         dalpha_dt += (self.tag_t !=0) * (ct >= 3000) * (ct<= 3100) * (self.tag_t < 3000) * (2 - self.alpha) / self.tau_alpha_p
         dalpha_dt += (self.tag_t !=0) * (ct >= 6000) * (ct<= 6100) * (self.tag_t > 3000)* (self.tag_t < 6000)*(2 - self.alpha) / self.tau_alpha_p
@@ -169,11 +192,7 @@ class twolayer_FF:
         self.rates += dr_dt * self.dt
         self.rec_w += dWdt * self.dt
         np.clip(self.rec_w, 0.0, self.max_w, out=self.rec_w)
-        if ct > 300000:
-            # enforce structural deletions
-            self.rec_w *= self.M
-            if ct % 1000 == 0:
-                self.prune_below_threshold_prob(threshold=0.2, p_prune=0.3)
+        
         self.alpha += dalpha_dt*self.dt
         self.epsi_i += dexcdt*self.dt
 
@@ -263,7 +282,7 @@ ctxB = np.array([1., 0., 1., 0., 1., 0., 0., 0., 0., 0., 1., 1., 0., 1., 0., \
                   1., 0., 0., 1., 0., 0., 0., 1., 0., 0., 0., 1., 1., 1., 0., \
                 1., 1., 0., 1., 0., 0., 1., 0., 1., 0., 1., 0., 1., 1., 1., 0. ,0., 1., 1., 0.])
 breakpoint()
-exp_condition = "w_maxc"
+exp_condition = "early_late_ltp"
 
 FR_history_all_cnt = []
 EX_history_all_cnt = []
@@ -282,16 +301,14 @@ input_history_all_res = []
 alpha_history_all_res = []
 
 
-nn_cnt = twolayer_FF(n_neurons=n1, tau=20, dt=1.0, tau_lr0=2500, tau_decay=4000, I0=7, I1=0.5, I2=0.05)
-nn_res = twolayer_FF(n_neurons=n1, tau=20, dt=1.0, tau_lr0=2500, tau_decay=4000, I0=7, I1=0.5, I2=0.05)  
+nn_cnt = twolayer_FF(n_neurons=n1, tau=20, dt=1.0, tau_lr0=2500, tau_decay=4300, I0=7, I1=0.5, I2=0.05)
+nn_res = twolayer_FF(n_neurons=n1, tau=20, dt=1.0, tau_lr0=2500, tau_decay=4300, I0=7, I1=0.5, I2=0.05)  
 
-nn_res.scaleE = 0.9
-nn_res.scaleW = 0.9
-nn_res.noise_scale = 0
-nn_cnt.noise_scale = 0
+
+# nn_cnt.noise_scale = 0
 # nn.max_w = 0.9
-nn_cnt.max_w = 0.85
-nn_res.max_w = 0.85
+# nn_cnt.max_w = 1
+
 for current_t in range(0,T):
     next_FR,input_fr  = nn_cnt.step(current_t,ctxA,ctxB,seqA,seqB)
     FR_history_all_cnt.append(next_FR.copy())
@@ -301,6 +318,11 @@ for current_t in range(0,T):
     # if current_t in [2900,8100,14100,20100,26100]:
     rec_weights_all_cnt.append(nn_cnt.rec_w.copy())
 
+# nn_res.noise_scale = 0
+# nn_res.max_w = 1
+nn_res.scaleE = 0.9
+nn_res.scaleW = 0.9
+for current_t in range(0,T):
     next_FR,input_fr  = nn_res.step(current_t,ctxA,ctxB,seqA,seqB)
     FR_history_all_res.append(next_FR.copy())
     input_history_all_res.append(input_fr.copy())
@@ -308,7 +330,7 @@ for current_t in range(0,T):
     alpha_history_all_res.append(nn_res.alpha[:,0].copy())
     # if current_t in [2900,8100,14100,20100,26100]:
     rec_weights_all_res.append(nn_res.rec_w.copy())
-        
+
 print(seqA1, seqA)
 print("current_t == 32000", current_t == T)
 FR_history_all_cnt = np.stack(FR_history_all_cnt)
@@ -373,10 +395,43 @@ un_res = [i for i in range(n1) if i not in tn1_res]
 avg_sw_cnt= rec_weights_all_cnt[:,tn1,tn1].mean(axis=1)
 avg_sw_res= rec_weights_all_res[:,tn1_res,tn1_res].mean(axis=1)
 # avg_sw = avg_sw_per_neuron.mean(axis=1)
-breakpoint()
 t_points = np.arange(1, current_t +2, 1) * 1e-3
 # plt.figure(figsize=(8,4))
 fs = 22  # <--- font size for ticks and labels
+# im = nn_cnt.rec_w + nn_cnt.tag_ij
+# fig = plt.figure(figsize=(8,4))
+# gs = gridspec.GridSpec(1, 1 + 1, width_ratios=[1] * 1 + [0.05], wspace=0.3)
+# plt.imshow(im)
+# cax = fig.add_subplot(gs[0, -1])
+# cbar = fig.colorbar(im, cax=cax)
+
+# cbar.ax.tick_params(labelsize=fs)
+# fname = f"{op_plot_folder}/tag_w.svg"
+# save_plot(fname)
+# plt.show()
+
+# im = nn_res.rec_w + nn_res.tag_ij
+# fig = plt.figure(figsize=(8,4))
+# gs = gridspec.GridSpec(1, 1 + 1, width_ratios=[1] * 1 + [0.05], wspace=0.3)
+# plt.imshow(im)
+# cax = fig.add_subplot(gs[0, -1])
+# cbar = fig.colorbar(im, cax=cax)
+
+# cbar.ax.tick_params(labelsize=fs)
+# fname = f"{op_plot_folder}/tag_w_{exp_condition}.svg"
+# save_plot(fname)
+# plt.show()
+# breakpoint()
+ims = np.array([(nn_cnt.rec_w > 0.2).astype(float) + nn_cnt.tag_ij, (nn_res.rec_w > 0.2).astype(float)+ nn_res.tag_ij])
+labs = ["STC only Model","STC + Epigenetic Priming Model"]
+plot_weights_over_time(
+    ims,
+    titles=labs,
+    fname=f"{op_plot_folder}/Rec_w_tag_{exp_condition}_rescue.svg",
+    cmaps='viridis'
+)
+
+breakpoint()
 
 plt.figure(figsize=(8,4))
 plt.plot(t_points, avg_sw_cnt, c=color[8], label='', linestyle='--')

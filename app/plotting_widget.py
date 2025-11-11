@@ -761,7 +761,7 @@ def plot_sessions_count_vs_activity_sem(
 
 def plot_firing_rate(timepoints, firing_rate, lab, fname = None,
                      xlabel="Time", ylabel="Firing Rate (Hz)", 
-                     c="r", threshold=8, ticksize=26):
+                     c="r", threshold=8, ticksize=14):
     """
     Plot firing rate over time with an active threshold line.
 
@@ -789,7 +789,7 @@ def plot_firing_rate(timepoints, firing_rate, lab, fname = None,
     plt.tick_params(axis='both', which='major', labelsize=ticksize)
     plt.legend(fontsize=ticksize)
     plt.tight_layout()
-    plt.ylim([-2,22])
+    plt.ylim([-2,14])
     if fname:
         try:
             save_plot(fname)  # your helper, if present
