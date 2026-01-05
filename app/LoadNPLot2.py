@@ -2,8 +2,8 @@ import numpy as np
 from plotting_widget import *
 import matplotlib.pyplot as plt
 import json
-input_data_folder = "./data/Reimagined13"
-op_plots_folder = "./plots/Reimagined13"
+input_data_folder = "./data/HPC_act_block"
+op_plots_folder = "./plots/HPC_act_block"
 # Path to your JSON file
 json_path = "{}/all_params.json".format(input_data_folder)
 dop = 2
@@ -48,7 +48,7 @@ last_activity_th_ctx = (last_activity_all_ctx > threshold).astype(float)*last_ac
 breakpoint()
 # total_time = 22000
 timepoints = np.arange(0,total_time,1)*1
-plot_firing_rate(timepoints, FR_op_history_all[0, :, 0],lab = "Output neuron",
+plot_firing_rate(timepoints, FR_op_history_all[:, :, 0],lab = "Output neuron",
                  xlabel="Time (s)", ylabel="Firing Rate (Hz)", c="r",fname= "{}/OP_neuron_activity.svg".format(op_plots_folder))
 # breakpoint()
 plot_activity_n_excitability_time([FR_history_th[0].T,EX_history_all[0].T],

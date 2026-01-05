@@ -759,46 +759,128 @@ def plot_sessions_count_vs_activity_sem(
 
     return counts_unique, mean_vals, sem_vals, n_per_bin
 
-def plot_firing_rate(timepoints, firing_rate, lab, fname = None,
+# def plot_firing_rate(timepoints, firing_rate, lab, fname = None,
+#                      xlabel="Time", ylabel="Firing Rate (Hz)", 
+#                      c="r", threshold=8, ticksize=14):
+#     """
+#     Plot firing rate over time with an active threshold line.
+
+#     Parameters:
+#         timepoints : array-like
+#             Time axis values.
+#         firing_rate : array-like
+#             Firing rate values to plot.
+#         xlabel, ylabel : str
+#             Axis labels.
+#         color : str
+#             Color for the firing rate curve.
+#         threshold : float
+#             y-value for the horizontal dashed threshold line.
+#         ticksize : int
+#             Font size for axis ticks.
+#     """
+#     fig, ax = plt.subplots(figsize=(8, 4))
+#     plt.plot(timepoints, firing_rate, label=lab, color=c)
+#     plt.hlines(y=threshold, xmin=timepoints[0], xmax=timepoints[-1],
+#                colors='k', linestyles=':', label="active threshold")
+    
+#     plt.xlabel(xlabel, fontsize=ticksize+2)
+#     plt.ylabel(ylabel, fontsize=ticksize+2)
+#     plt.tick_params(axis='both', which='major', labelsize=ticksize)
+#     plt.legend(fontsize=ticksize)
+#     plt.tight_layout()
+#     plt.ylim([-2,20])
+#     if fname:
+#         try:
+#             save_plot(fname)  # your helper, if present
+#         except NameError:
+#             plt.savefig(fname, dpi=200)
+#         plt.close(fig)
+#     else:
+#         plt.show()
+#     plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_firing_rate(timepoints, firing_rate, lab, fname=None,
                      xlabel="Time", ylabel="Firing Rate (Hz)", 
                      c="r", threshold=8, ticksize=14):
     """
-    Plot firing rate over time with an active threshold line.
+    Plot mean firing rate over time with a 95% CI band and an active threshold line.
 
     Parameters:
-        timepoints : array-like
+        timepoints : array-like, shape (n_timepoints,)
             Time axis values.
         firing_rate : array-like
-            Firing rate values to plot.
+            If 1D: firing rate values to plot directly.
+            If 2D: shape (n_trials, n_timepoints); mean and 95% CI will be computed across trials.
+        lab : str
+            Label for the firing rate curve.
+        fname : str or None
+            If provided, figure will be saved to this path.
         xlabel, ylabel : str
             Axis labels.
-        color : str
-            Color for the firing rate curve.
+        c : str
+            Color for the firing rate curve and CI band.
         threshold : float
             y-value for the horizontal dashed threshold line.
         ticksize : int
             Font size for axis ticks.
     """
+
+    firing_rate = np.asarray(firing_rate)
+
     fig, ax = plt.subplots(figsize=(8, 4))
-    plt.plot(timepoints, firing_rate, label=lab, color=c)
-    plt.hlines(y=threshold, xmin=timepoints[0], xmax=timepoints[-1],
-               colors='k', linestyles=':', label="active threshold")
-    
-    plt.xlabel(xlabel, fontsize=ticksize+2)
-    plt.ylabel(ylabel, fontsize=ticksize+2)
-    plt.tick_params(axis='both', which='major', labelsize=ticksize)
-    plt.legend(fontsize=ticksize)
-    plt.tight_layout()
-    plt.ylim([-2,14])
+
+    # Handle 1D vs 2D input
+    if firing_rate.ndim == 1:
+        mean_fr = firing_rate
+        ci95 = None
+    elif firing_rate.ndim == 2:
+        # mean across trials
+        mean_fr = firing_rate.mean(axis=0)
+        # SEM and 95% CI (normal approximation)
+        n_trials = firing_rate.shape[0]
+        sem = firing_rate.std(axis=0, ddof=1) / np.sqrt(n_trials)
+        ci95 = 1.96 * sem
+    else:
+        raise ValueError("firing_rate must be 1D or 2D (trials x timepoints).")
+
+    # Plot mean
+    ax.plot(timepoints, mean_fr, label=lab, color=c)
+
+    # Plot 95% CI band if available
+    if ci95 is not None:
+        ax.fill_between(timepoints,
+                        mean_fr - ci95,
+                        mean_fr + ci95,
+                        color=c,
+                        alpha=0.3,
+                        edgecolor='none',
+                        label="95% CI")
+
+    # Threshold line
+    ax.hlines(y=threshold, xmin=timepoints[0], xmax=timepoints[-1],
+              colors='k', linestyles=':', label="active threshold")
+
+    # Cosmetics
+    ax.set_xlabel(xlabel, fontsize=ticksize + 2)
+    ax.set_ylabel(ylabel, fontsize=ticksize + 2)
+    ax.tick_params(axis='both', which='major', labelsize=ticksize)
+    ax.set_ylim([-2, 20])
+    ax.legend(fontsize=ticksize)
+    fig.tight_layout()
+
+    # Save or show
     if fname:
         try:
             save_plot(fname)  # your helper, if present
         except NameError:
-            plt.savefig(fname, dpi=200)
+            fig.savefig(fname, dpi=200)
         plt.close(fig)
     else:
         plt.show()
-    plt.show()
 
 import numpy as np
 import matplotlib.pyplot as plt

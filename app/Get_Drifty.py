@@ -93,7 +93,7 @@ off_set = 0
 T_recall =  500
 
 
-delta = 15 # input current
+delta = 15 # input current 
 delta_2 = 15
 theta = 5 #threshold firing rate for active neurons
 c = 1 #cap pn recurrent weights
