@@ -46,6 +46,8 @@ class twolayer_FF:
         # self.input_w = torch.clamp(self.input_w, 0.0, 0.1)
         self.rec_w = torch.zeros(n_MTL, n_MTL)
         self.rec_w_ctx = torch.zeros(self.n_CTX, self.n_CTX)
+        self.HPC_CTX = torch.abs(torch.normal(0,0.05,size=(n_CTX,n_MTL)))
+        self.CTX_HPC = torch.abs(torch.normal(0,0.05,size=(n_MTL,n_CTX)))
         
         self.mtl_op_w = torch.abs(torch.normal(0,0.05,size=(self.op_neuron,n_MTL)))
         self.ctx_op_w = torch.abs(torch.normal(0,0.05,size=(self.op_neuron,n_CTX)))
@@ -54,14 +56,6 @@ class twolayer_FF:
         self.rates = torch.zeros(n_MTL)
         self.op_rate = torch.zeros(self.op_neuron)
         # self.
-    def TurnOFF_FB(self):
-        self.FB_CTX_MTL = 0.#torch.zeros_like(self.FB_CTX_MTL)
-    def TurnON_FB(self):
-        self.FB_CTX_MTL = 0.17#*torch.ones_like(self.FB_CTX_MTL)
-    def TurnOFF_FF(self):
-        self.FF_MTL_CTX = 0.#torch.zeros_like(self.FF_MTL_CTX)
-    def TurnON_FF(self):
-        self.FF_MTL_CTX = 2.#*torch.ones_like(self.FF_MTL_CTX)
 
     def step(self, input_FR, op_signal = 0):
         """
@@ -71,8 +65,8 @@ class twolayer_FF:
         # calculating the input to the RNN
         self.rates *= (self.rates > 1e-5).float()  # Ensure rates are non-negative
         self.rates_ctx *= (self.rates_ctx > 1e-5).float()
-        input_vector = input_FR + self.rec_w @ self.rates - self.FB_CTX_MTL * self.rates_ctx
-        input_CTX = input_FR + self.rec_w_ctx @ self.rates_ctx + self.FF_MTL_CTX * self.rates
+        input_vector = input_FR + self.rec_w @ self.rates - self.CTX_HPC @ self.rates_ctx
+        input_CTX = input_FR + self.rec_w_ctx @ self.rates_ctx + self.HPC_CTX @ self.rates
         input_op = self.mtl_op_w @ self.rates + self.ctx_op_w @ self.rates_ctx
 
         # breakpoint()
@@ -124,9 +118,22 @@ class twolayer_FF:
         self.rec_w_ctx += (hebbian_dw_ctx - decay_ctx)
         
         hebb_ctx_op = self.lr_op * op_signal * torch.outer(self.op_rate, self.rates_ctx*post_mask) * self.dt
-
         self.ctx_op_w += hebb_ctx_op
-        sum_w = (torch.sum(self.mtl_op_w) + torch.sum(self.ctx_op_w)/2.)
+
+
+        p1 = self.rates > self.threshold
+        p2 = self.rates_ctx > self.threshold
+        hebb_dw_hpc_ctx = self.on_ctx* self.lr_ctx * torch.outer(self.rates_ctx*p2, self.rates*p1) * self.dt
+        decay_hpc_ctx = self.decay_r_ctx * self.HPC_CTX * self.dt
+        self.HPC_CTX += (hebb_dw_hpc_ctx - decay_hpc_ctx)
+
+        hebb_dw_ctx_hpc = self.on * self.lr_ctx * torch.outer(self.rates*p1, self.rates_ctx*p2) * self.dt
+        decay_ctx_hpc = self.decay_r * self.CTX_HPC * self.dt
+        self.CTX_HPC += (hebb_dw_ctx_hpc - decay_ctx_hpc)
+
+
+
+        sum_w = torch.sum(self.mtl_op_w) + torch.sum(self.ctx_op_w)
         self.ctx_op_w /= sum_w
         self.ctx_op_w = torch.clamp(self.ctx_op_w,min=0)
         self.mtl_op_w /= sum_w
@@ -141,6 +148,8 @@ class twolayer_FF:
         # self.rates = torch.clamp(self.rates, 0.0, 15)  # Ensure rates are non-negativeå
         self.rec_w = torch.clamp(self.rec_w, 0.0, 1.0)  # Ensure weights are non-negative
         self.rec_w_ctx = torch.clamp(self.rec_w_ctx, 0.0, 1.0)
+        self.HPC_CTX = torch.clamp(self.HPC_CTX, 0.0, 1.0)  # Ensure weights are non-negative
+        self.CTX_HPC = torch.clamp(self.CTX_HPC, 0.0, 1.0)
         # self.input_w = torch.clamp(self.input_w, 0.0, 0.2)  # Ensure weights are non-negative
         # self._normalize_input_outgoing(target_sum=15)
         
@@ -170,8 +179,8 @@ N_off_days = 11
 n = 10 + (N_off_days)*20 #10 default + 20 neurons per off day
 n_inp = n 
 n_ctx = n 
-E_fl = 2.2
-E_fl_ctx = 2.2
+E_fl = 1.9
+E_fl_ctx = 1.9
 max_e = 3
 E_ref = 0.7
 threshold = 2
@@ -180,9 +189,9 @@ off_set = 0
 
 
 # base_E[:off_set] += 2
-sim_name = "CNT_slow_drift"
+sim_name = "CNT_FP_slow_drift"
 notes = "trying with Feedback and feedforward connection of equal strength"
-FC_inp = 19
+FC_inp = 18
 input = FC_inp*torch.ones(n_inp)
 zero_input = torch.zeros(n_inp)
 mu_ex = 0
@@ -205,6 +214,8 @@ ctx_op_weights_all = []
 last_activity_all = []
 input_history_all = []
 rec_ctx_weights_all = []
+hpc_ctx_weights_all = []
+ctx_hpc_weights_all = []
 FR_ctx_history_all = []
 last_activity_ctx_all = []
 FR_op_history_all = []
@@ -224,7 +235,7 @@ for i in trange(NUM_SIM):
                     lr=1/1000, decay_r=1/1200, 
                     lr_ctx = 5e-5,decay_r_ctx=0,
                     lr_op = 1e-3,
-                    I0=7., I1=0.7, I2=0.03)
+                    I0=7, I1=0.7, I2=0.03)
     FR_history = []
     FR_history_ctx = []
     FR_op_history = []
@@ -240,6 +251,9 @@ for i in trange(NUM_SIM):
     high_threshold = 5 
     mtl_op_weights = []
     ctx_op_weights = []
+    hpc_ctx_weights = []
+    ctx_hpc_weights = []
+
     # total_time += 10
     nn.excitability = base_E.clone()
     day = 0
@@ -297,11 +311,11 @@ for i in trange(NUM_SIM):
         if day == 0:
             op_learning = 1.
         else:
-            op_learning = 0.
+            op_learning = 0.0
             
         for rep in range(Nrep):
-            nn.TurnON_FB()
-            nn.TurnON_FF()
+            # nn.TurnON_FB()
+            # nn.TurnON_FF()
             
             if day in dob:
                 nn.gain_hpc = 0.0
@@ -322,8 +336,8 @@ for i in trange(NUM_SIM):
             day_activity.append(np.mean(FR_history[-t_off:],axis=0))
             day_activity_ctx.append(np.mean(FR_history_ctx[-t_off:],axis=0))    
             total_time += IR
-            nn.TurnOFF_FB()
-            nn.TurnOFF_FF()
+            # nn.TurnOFF_FB()
+            # nn.TurnOFF_FF()
             for t in range(IR):
                 next_FR,FR_ctx, FR_op = nn.step(zero_input,0)
                 FR_history.append(next_FR)
@@ -337,6 +351,8 @@ for i in trange(NUM_SIM):
         rec_ctx_weights.append(nn.rec_w_ctx.detach().clone().numpy())
         mtl_op_weights.append(nn.mtl_op_w.detach().clone().numpy())
         ctx_op_weights.append(nn.ctx_op_w.detach().clone().numpy())
+        hpc_ctx_weights.append(nn.HPC_CTX.detach().clone().numpy())
+        ctx_hpc_weights.append(nn.CTX_HPC.detach().clone().numpy())
         # ff_weights.append(nn.input_w.detach().clone().numpy())
         last_activity.append(np.mean(day_activity,axis=0))
         last_activity_ctx.append(np.mean(day_activity_ctx,axis=0))
@@ -363,6 +379,8 @@ for i in trange(NUM_SIM):
     last_activity_ctx_all.append(last_activity_ctx)
     mtl_op_weights_all.append(mtl_op_weights)
     ctx_op_weights_all.append(ctx_op_weights)
+    hpc_ctx_weights_all.append(hpc_ctx_weights)
+    ctx_hpc_weights_all.append(ctx_hpc_weights)
 FR_history_all = np.stack(FR_history_all)
 FR_ctx_history_all = np.stack(FR_ctx_history_all)
 FR_op_history_all  = np.stack(FR_op_history_all)
@@ -375,6 +393,8 @@ last_activity_all = np.stack(last_activity_all)
 last_activity_ctx_all = np.stack(last_activity_ctx_all)
 rec_weights_all = np.stack(rec_weights_all)
 rec_ctx_weights_all = np.stack(rec_ctx_weights_all)
+hpc_ctx_weights_all = np.stack(hpc_ctx_weights_all)
+ctx_hpc_weights_all = np.stack(ctx_hpc_weights_all)
 
 op_data_folder = "./data/{}".format(sim_name)
 op_plot_folder = "./plots/{}".format(sim_name)# --- IGNORE ---
@@ -383,6 +403,8 @@ np.save("{}/rec_weights.npy".format(op_data_folder),rec_weights_all)
 np.save("{}/mtl_op_weights.npy".format(op_data_folder),mtl_op_weights_all)
 np.save("{}/ctx_op_weights.npy".format(op_data_folder),ctx_op_weights_all)
 np.save("{}/rec_ctx_weights.npy".format(op_data_folder),rec_ctx_weights_all)
+np.save("{}/hpc_ctx_weights.npy".format(op_data_folder),hpc_ctx_weights_all)
+np.save("{}/ctx_hpc_weights.npy".format(op_data_folder),ctx_hpc_weights_all)
 np.save("{}/FR_history.npy".format(op_data_folder),FR_history_all)
 np.save("{}/FR_history_ctx.npy".format(op_data_folder),FR_ctx_history_all)
 np.save("{}/FR_history_op.npy".format(op_data_folder),FR_op_history_all)
@@ -392,8 +414,8 @@ np.save("{}/last_activity.npy".format(op_data_folder),last_activity_all)
 np.save("{}/last_activity_ctx.npy".format(op_data_folder),last_activity_ctx_all)
 
 # np.save("./data/Reimagined3/input_history.npy",input_history_all)  
-nn.TurnON_FB()
-nn.TurnON_FF()
+# nn.TurnON_FB()
+# nn.TurnON_FF()
 sim_params = {
     "n": n,
     "n_inp": n_inp,
@@ -502,6 +524,14 @@ plot_weights_over_time(rec_weights_all[0],
 plot_weights_over_time(rec_ctx_weights_all[0],
                        titles=  labs,
                        fname="{}/Rec_w_ctx.svg".format(op_plot_folder),
+                       cmaps='gray_r')
+plot_weights_over_time(hpc_ctx_weights_all[0],
+                       titles=  labs,
+                       fname="{}/HPC_CTX_w.svg".format(op_plot_folder),
+                       cmaps='gray_r')
+plot_weights_over_time(ctx_hpc_weights_all[0],
+                       titles=  labs,
+                       fname="{}/CTX_HPC_w.svg".format(op_plot_folder),
                        cmaps='gray_r')
 
 plot_weights_over_time(mtl_op_weights_all[0],
