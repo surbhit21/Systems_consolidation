@@ -373,7 +373,8 @@ def plot_mean_std_corr_over_time(
     capsize=5,
     marker='o',
     linewidth=3,
-    bar_plot = False
+    bar_plot = False,
+    no_plot = False
 ):
     """
     Compute & plot mean ± sem of correlations over time across simulations (errorbar plot).
@@ -445,7 +446,8 @@ def plot_mean_std_corr_over_time(
     mean_corr = np.nanmean(per_sim_corr, axis=0)
     std_corr  = np.nanstd(per_sim_corr, axis=0)
     sem_corr  = std_corr / np.sqrt(sims)
-
+    if no_plot:
+        return mean_corr, sem_corr, per_sim_corr, sel_time_idx
     # x labels
     if xlabels is None:
         xlabels = [f"T{t}" for t in sel_time_idx]

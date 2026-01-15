@@ -41,6 +41,7 @@ class twolayer_FF:
         self.op_neuron = 1
         self.on = 1.0  # plasticity on/off
         self.on_ctx = 1.0
+        self.tagged_ACC = np.zeros(n_CTX)
         # Initialize random input weights
         self.input_w = torch.abs(torch.normal(0,0.05,size=(n_inp,n_MTL)))
         # self.input_w = torch.clamp(self.input_w, 0.0, 0.1)
@@ -61,9 +62,9 @@ class twolayer_FF:
     def TurnOFF_FF(self):
         self.FF_MTL_CTX = 0.#torch.zeros_like(self.FF_MTL_CTX)
     def TurnON_FF(self):
-        self.FF_MTL_CTX = 2.#*torch.ones_like(self.FF_MTL_CTX)
+        self.FF_MTL_CTX = 1.#*torch.ones_like(self.FF_MTL_CTX)
 
-    def step(self, input_FR, op_signal = 0):
+    def step(self, input_FR, op_signal = 0,day_c=0):
         """
         Perform one timestep of rate dynamics:
         input_vector: shape [n_MTL]
@@ -80,6 +81,10 @@ class twolayer_FF:
         # blanket inhibition to the RNN
         I_inhib = self.I0 + self.I1 * torch.sum(self.rates) + self.I2 * torch.sum(self.rates**2)
         I_inhib_ctx = self.I0 + self.I1 * torch.sum(self.rates_ctx) + self.I2 * torch.sum(self.rates_ctx**2)
+
+        # self.tag_t = self.tag_t + (self.rates > self.theta).astype(float) * (self.tag_t == 0).astype(float) * day_c
+        # breakpoint()
+        self.tagged_ACC = self.tagged_ACC + ((self.rates_ctx > self.threshold).detach().clone().numpy().astype(float) * (self.tagged_ACC == 0).astype(float) * day_c)
 
 
         # print(I_inhib)
@@ -170,18 +175,18 @@ N_off_days = 11
 n = 10 + (N_off_days)*20 #10 default + 20 neurons per off day
 n_inp = n 
 n_ctx = n 
-E_fl = 2.2
-E_fl_ctx = 2.2
-max_e = 3
+E_fl = 1.5
+E_fl_ctx = 1.5
+max_e = 10
 E_ref = 0.7
-threshold = 2
+threshold = 5
 off_set = 0
 
 
 
 # base_E[:off_set] += 2
-sim_name = "CNT_slow_drift"
-notes = "trying with Feedback and feedforward connection of equal strength"
+sim_name = "CNT_slow_drift_with_IP_with_FB"
+notes = "2 region model with slow drift due to low excitability boosts in both regions with intrinsic plasticity. ACC neurons that are part of the FC engram get an extra boost in excitability during off days."
 FC_inp = 19
 input = FC_inp*torch.ones(n_inp)
 zero_input = torch.zeros(n_inp)
@@ -190,7 +195,7 @@ sigma_ex = 1.0
 
 ID = 1000
 dt = 1
-NUM_SIM = 4
+NUM_SIM = 10
 t_off = 100
 IR = 100
 Nrep = 10
@@ -244,27 +249,10 @@ for i in trange(NUM_SIM):
     nn.excitability = base_E.clone()
     day = 0
     nn.excitability[off_set+(day)*20:off_set+(day)*20+20] += E_fl
-    nn.excitability = torch.clip(nn.excitability,0,max_e)
+    # nn.excitability = torch.clip(nn.excitability,0,max_e)
     nn.excitability_ctx  = base_e_ctx.clone()
     nn.excitability_ctx[(off_set+(day)*20): (off_set+(day)*20+20)] += E_fl_ctx
-    nn.excitability_ctx = torch.clip(nn.excitability_ctx,0,max_e)
-    # for t in range(10):
-    #     next_FR,FR_ctx,FR_op = nn.step(zero_input,0)
-    #     FR_history.append(next_FR)
-    #     FR_history_ctx.append(FR_ctx)
-    #     FR_op_history.append(FR_op)
-    #     EX_history.append(nn.excitability.detach().clone().numpy())
-    #     EX_history_ctx.append(nn.excitability_ctx.detach().clone().numpy())
-    #     input_history.append(zero_input.numpy())
-    # total_time += t_encoding
-    # for t in range(t_encoding):
-    #     next_FR,FR_ctx,FR_op = nn.step(input,1.0)
-    #     FR_history.append(next_FR)
-    #     FR_history_ctx.append(FR_ctx)
-    #     FR_op_history.append(FR_op)
-    #     EX_history.append(nn.excitability.detach().clone().numpy())
-    #     EX_history_ctx.append(nn.excitability_ctx.detach().clone().numpy())
-    #     input_history.append(zero_input.numpy())
+    
     total_time += ID
     for t in range(ID):
         next_FR,FR_ctx,FR_op = nn.step(zero_input,0)
@@ -277,16 +265,14 @@ for i in trange(NUM_SIM):
     for day in range(N_off_days):
         day_activity = []
         day_activity_ctx = []
-
-        # torch.manual_seed(120+day)
-        # base_E = torch.abs(torch.normal(mu_ex,sigma_ex,size=(n,)))
-        # base_e_ctx = torch.abs(torch.normal(mu_ex,sigma_ex,size=(n_ctx,)))
         nn.excitability = base_E.clone()
         nn.excitability[off_set+(day)*20:off_set+(day)*20+20] += E_fl
-        nn.excitability = torch.clip(nn.excitability,0,max_e)
         nn.excitability_ctx  = base_e_ctx.clone()
-        nn.excitability_ctx[(off_set+(day)*20):(off_set+(day)*20 + 20)] += E_fl_ctx
-        nn.excitability_ctx = torch.clip(nn.excitability_ctx,0,max_e)
+        FC_active_neurons = np.where(nn.tagged_ACC == 1)[0]
+        new_neurons = range(off_set + day*20, off_set + day*20 + 20, 1)
+        nn.excitability_ctx[FC_active_neurons] += (2*E_fl_ctx) 
+        # breakpoint()
+        nn.excitability_ctx[new_neurons] += E_fl_ctx
         inp_to_network = input                
         # if day == 1:
         #     nn.TurnOFF_FB()
@@ -304,15 +290,19 @@ for i in trange(NUM_SIM):
             nn.TurnON_FF()
             
             if day in dob:
-                nn.gain_hpc = 0.0
+                # nn.gain_hpc = 0.0
                 # nn.TurnOFF_FB()
+                nn.TurnOFF_FF()
+                nn.on_ctx = 0.0
             else:
-                nn.gain_hpc  = 1.0
+                # nn.gain_hpc  = 1.0
                 # nn.TurnON_FB()
+                nn.TurnON_FF()
+                nn.on_ctx = 1.0
             
             total_time += t_off
             for t in range(t_off):
-                next_FR,FR_ctx,FR_op = nn.step(inp_to_network,op_learning)
+                next_FR,FR_ctx,FR_op = nn.step(inp_to_network,op_learning,day_c=day+1)
                 FR_history.append(next_FR)
                 FR_history_ctx.append(FR_ctx)
                 FR_op_history.append(FR_op)
@@ -325,7 +315,7 @@ for i in trange(NUM_SIM):
             nn.TurnOFF_FB()
             nn.TurnOFF_FF()
             for t in range(IR):
-                next_FR,FR_ctx, FR_op = nn.step(zero_input,0)
+                next_FR,FR_ctx, FR_op = nn.step(zero_input,0,day_c=day+1)
                 FR_history.append(next_FR)
                 FR_history_ctx.append(FR_ctx)
                 FR_op_history.append(FR_op)
@@ -342,7 +332,7 @@ for i in trange(NUM_SIM):
         last_activity_ctx.append(np.mean(day_activity_ctx,axis=0))
         total_time += ID
         for t in range(ID):
-            next_FR,FR_ctx,FR_op = nn.step(zero_input,0)
+            next_FR,FR_ctx,FR_op = nn.step(zero_input,0,day_c=day+1)
             FR_history.append(next_FR)
             FR_history_ctx.append(FR_ctx)
             FR_op_history.append(FR_op)
@@ -412,6 +402,7 @@ sim_params = {
     "total_time": total_time,
     "dt": dt,
     "NUM_SIM": NUM_SIM,
+    "notes": notes
 }
 data = {
         "model_params": {
@@ -463,7 +454,7 @@ mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
 # breakpoint()
 mean_corr_cxt, std_corr_cxt, per_sim_corr_cxt, idx_cxt = plot_mean_std_corr_over_time(
     last_activity_ctx_all ,                # shape: (sims, time, neurons)
-    ref_time_idx=0,         # Encoding
+    ref_time_idx=1,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=True,
     title="Cell population \n activity correlation",
@@ -471,7 +462,11 @@ mean_corr_cxt, std_corr_cxt, per_sim_corr_cxt, idx_cxt = plot_mean_std_corr_over
     cmap = "Greens"
 )
 
-
+mean_DR = np.sum(1-mean_corr)/(N_off_days)
+mean_DR_ctx = np.sum(1-mean_corr_cxt)/(N_off_days)
+print("excitability boosts:", E_fl, E_fl_ctx)
+print("Normalized drift rate:", mean_DR)
+print("Normalized drift rate:", mean_DR_ctx)
 FR_history_th = (FR_history_all > threshold).astype(float)*FR_history_all
 FR_history_th_ctx = (FR_ctx_history_all > threshold).astype(float)*FR_ctx_history_all
 
@@ -512,30 +507,5 @@ plot_weights_over_time(ctx_op_weights_all[0],
                        titles=  labs,
                        fname="{}/ctx_op_w.svg".format(op_plot_folder),
                        cmaps='gray_r')
-# cbars = ["fff5f0ff","fdcab5ff","fc8a6aff","f96044ff","e83429ff","c3161bff","980c13ff",]
-# xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
-# Title = "Ensemble similarity of encoding and offline + recall"
-# # plot_row_correlations(last_activity[0,0],last_activity[0,1:], xlabs=xlabs,title=Title,fname="./plots/Reimagined3/encoding_corr.svg", use_bar_plot=True)
-# mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-#     last_activity_all,                # shape: (sims, time, neurons)
-#     ref_time_idx=0,         # Encoding
-#     xlabels=xlabs,         # must match number of non-ref times
-#     include_ref_bar=False,
-#     title="Encoding vs. others (mean ± SD across sims)",
-#     fname="./plots/Reimagined3/encoding_vs_others_mean_std.svg",
-#     bar_colors = cbars[1:last_activity_all.shape[0]+1]
-# )
 
-# xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
-# Title = "Ensemble similarity of recall and offline + encoding"
-# # plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined3//Recall_corr.svg", use_bar_plot=True)
-# last_activity_all, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
-#     last_activity_all,                # shape: (sims, time, neurons)
-#     ref_time_idx=-1,         # Encoding
-#     xlabels=xlabs,         # must match number of non-ref times
-#     include_ref_bar=False,
-#     title="Encoding vs. others (mean ± SD across sims)",
-#     fname="./plots/Reimagined3/recall_vs_others_mean_std.svg",
-#     bar_colors = cbars[:last_activity_all.shape[0]]
-# )
 
