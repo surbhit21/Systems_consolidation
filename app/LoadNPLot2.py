@@ -2,8 +2,8 @@ import numpy as np
 from plotting_widget import *
 import matplotlib.pyplot as plt
 import json
-input_data_folder = "./data/CNT_slow_drift_with_IP_with_FB"
-op_plots_folder = "./plots/CNT_slow_drift_with_IP_with_FB"
+input_data_folder = "./data/CNT_fast_drift_with_IP"
+op_plots_folder = "./plots/CNT_fast_drift_with_IP"
 # Path to your JSON file
 json_path = "{}/all_params.json".format(input_data_folder)
 dop = 2
