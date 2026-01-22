@@ -202,3 +202,4 @@ app/annarchy_builds
 plots
 *.png
 data
+*.svg

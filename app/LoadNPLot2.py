@@ -51,16 +51,19 @@ timepoints = np.arange(0,total_time,1)*1
 plot_firing_rate(timepoints, FR_op_history_all[:, :, 0],lab = "Output neuron",
                  xlabel="Time (s)", ylabel="Firing Rate (Hz)", c="r",fname= "{}/OP_neuron_activity.svg".format(op_plots_folder))
 # breakpoint()
-plot_activity_n_excitability_time([FR_history_th[0].T,EX_history_all[0].T],
-                       titles=['Neuronal Activity',
-                                "Neuronal Excitability"],
-                       fname="{}/Activity_n_excitability.svg".format(op_plots_folder),
-                       cmaps=['Oranges', 'Blues'])
-plot_activity_n_excitability_time([FR_history_th_ctx[0].T,EX_history_all_ctx[0].T],
-                       titles=['Neuronal Activity',
-                                "Neuronal Excitability"],
-                       fname="{}/Activity_n_excitability_ctx.svg".format(op_plots_folder),
-                       cmaps=['Greens', 'Blues'])
+
+plot_activity_n_excitability_time([FR_history_th[0].T,FR_history_th_ctx[0].T],
+                       titles=['Neuronal Activity (HPC)',
+                                'Neuronal Activity (CTX)'],
+                       fname="{}/Activity.svg".format(op_plots_folder),
+                       cmaps=['Oranges', 'Greens'])
+
+
+plot_activity_n_excitability_time([EX_history_all[0].T,EX_history_all_ctx[0].T],
+                       titles=['Neuronal Excitability (HPC)',
+                                'Neuronal Excitability (CTX)'],
+                       fname="{}/Excitability_ctx.svg".format(op_plots_folder),
+                       cmaps=['Blues', 'Greens'])
 # labs = ["FC"] t [f"Off {it1}" for i in range(N_off_days)]
 # plot_weights_over_time(rec_weights_all[0],
 #                        titles=  labs,

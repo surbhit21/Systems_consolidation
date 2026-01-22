@@ -807,7 +807,7 @@ import matplotlib.pyplot as plt
 
 def plot_firing_rate(timepoints, firing_rate, lab, fname=None,
                      xlabel="Time", ylabel="Firing Rate (Hz)", 
-                     c="r", threshold=8, ticksize=14):
+                     c="r", threshold=5, ticksize=14):
     """
     Plot mean firing rate over time with a 95% CI band and an active threshold line.
 
