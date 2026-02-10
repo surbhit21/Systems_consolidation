@@ -1,7 +1,9 @@
 import os
+# from turtle import pd
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
+import pandas as pd
 from Utilities import center_of_mass_rowwise, center_of_mass_columnwise_blocked
 import seaborn as sns
 from sklearn.decomposition import PCA
@@ -129,7 +131,7 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
     save_plot(fname)
     plt.show()
     
-def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_fontsize=28, tick_fontsize=28, colorbar_fontsize=28):
+def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',seqA = [],title_fontsize=28, tick_fontsize=28, colorbar_fontsize=28):
     """
     Plots weight matrices from different time points in one row.
 
@@ -152,7 +154,10 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',title_
 
         cbar = plt.colorbar(im)
         cbar.ax.tick_params(labelsize=colorbar_fontsize)
-
+        h1 = -10
+        for s in range(int(len(seqA)/2-1)):
+            print(seqA[2*s], seqA[2*s+1])
+            plt.plot([seqA[2*s], seqA[2*s+1]], [h1, h1], 'k')
     plt.tight_layout()
     save_plot(fname)
     plt.show()
@@ -475,7 +480,7 @@ def plot_mean_std_corr_over_time(
     # styling
     ax.spines[["right", "top"]].set_visible(False)
     ax.set_title(title, fontsize=font_size)
-    ax.set_xlabel("Time", fontsize=font_size)
+    ax.set_xlabel("Days", fontsize=font_size)
     ax.set_ylabel("PV Correlation", fontsize=font_size)
     ax.set_xticks(x, xlabels)
     y_min = mean_corr.min() - sem_corr.max()
@@ -802,8 +807,7 @@ def plot_sessions_count_vs_activity_sem(
 #         plt.show()
 #     plt.show()
 
-import numpy as np
-import matplotlib.pyplot as plt
+
 
 def plot_firing_rate(timepoints, firing_rate, lab, fname=None,
                      xlabel="Time", ylabel="Firing Rate (Hz)", 
@@ -884,9 +888,6 @@ def plot_firing_rate(timepoints, firing_rate, lab, fname=None,
     else:
         plt.show()
 
-import numpy as np
-import matplotlib.pyplot as plt
-
 def plot_tagged_activity(activity, threshold, method='mean'):
     """
     Plot average activity of tagged vs non-tagged neurons over time.
@@ -942,3 +943,118 @@ def plot_tagged_activity(activity, threshold, method='mean'):
 # activity = np.random.rand(N, T)
 # threshold = 0.6
 # plot_tagged_activity(activity, threshold, method='mean')
+
+
+def plot_engram_size(
+    activity,
+    threshold,
+    day_labels=None,
+    error="sem",          # "std" or "sem"
+    jitter=0.05,
+    point_alpha=0.5,
+    point_size=20,
+    line_alpha=0.1,
+    line_width=1.0,
+    error_color="red",
+    capsize=4,
+    figsize=(8,6),
+    title="Engram size",
+    fname=None,
+    title_fontsize=20, 
+    tick_fontsize=20,
+):
+    """
+    Strip plot with mean ± error bars per day.
+
+    Parameters
+    ----------
+    counts : array-like, shape (NUM_SIM, NUM_DAYS)
+        Neuron counts per simulation and day.
+    day_labels : array-like or None
+        Labels for days.
+    error : {"std", "sem"}
+        Error type to plot.
+    jitter : float
+        Horizontal jitter for strip plot.
+    point_alpha : float
+        Transparency of points.
+    point_size : int
+        Size of strip plot points.
+    error_color : str
+        Color of error bars.
+    capsize : int
+        Capsize for error bars.
+    figsize : tuple or None
+        Figure size.
+    title : str
+        Plot title.
+    """
+
+    counts = (activity > threshold).sum(axis=2)  # shape: (num_sim, num_days)
+    num_sim, num_days = counts.shape
+
+    if day_labels is None:
+        day_labels = np.arange(num_days)
+
+    if figsize is None:
+        figsize = (max(6, 1.2 * num_days), 6)
+
+    # Mean and error
+    mean = counts.mean(axis=0)
+
+    if error == "std":
+        err = counts.std(axis=0)
+    elif error == "sem":
+        err = counts.std(axis=0, ddof=1) / np.sqrt(num_sim)
+    else:
+        raise ValueError("error must be 'std' or 'sem'")
+
+    plt.figure(figsize=figsize)
+    # for s in range(num_sim):
+    #     plt.plot(
+    #         day_labels,
+    #         counts[s],
+    #         color="black",
+    #         alpha=line_alpha,
+    #         linewidth=line_width,
+    #         zorder=1
+    #     )
+    # Strip plot
+    for d in range(num_days):
+        x = np.random.normal(day_labels[d], jitter, size=num_sim)
+        plt.scatter(
+            x,
+            counts[:, d],
+            alpha=point_alpha,
+            s=point_size
+        )
+
+    # Error bars (mean ± error)
+    plt.errorbar(
+        day_labels,
+        mean,
+        yerr=err,
+        fmt="o",
+        color=error_color,
+        capsize=capsize,
+        linewidth=2,
+        markersize=6,
+        zorder=3
+    )
+
+    plt.xlabel("Day",fontsize=tick_fontsize)
+    plt.ylabel("Neurons above threshold",fontsize=tick_fontsize)
+    plt.title(title,fontsize=title_fontsize)
+    plt.tick_params(axis='both', which='major', labelsize=tick_fontsize)
+    plt.ylim(0, counts.max() + 1)
+    plt.tight_layout()
+    if fname:
+        try:
+            save_plot(fname)  # your helper, if present
+        except NameError:
+            plt.savefig(fname, dpi=200)
+        # plt.close(fig)
+   
+    plt.show()
+    return counts
+    # plt.show()
