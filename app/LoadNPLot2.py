@@ -52,7 +52,7 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_with_limited1_IP_lowI", op_
     ctx_op_weights_all = np.load("{}/ctx_op_weights.npy".format(input_data_folder))
     mtl_ctx_weights_all = np.load("{}/mtl_ctx_weights.npy".format(input_data_folder))
     ctx_mtl_weights_all = np.load("{}/ctx_mtl_weights.npy".format(input_data_folder))
-    input_history = np.load("{}/input_history.npy".format(input_data_folder))
+    input_history = np.load("{}/input_history.npy".format(input_data_folder),allow_pickle=True)
     FR_history_th = (FR_history_all > threshold).astype(float)*FR_history_all
     FR_history_th_ctx = (FR_history_all_ctx > threshold).astype(float)*FR_history_all_ctx
     last_activity_th = (last_activity_all > threshold).astype(float)*last_activity_all

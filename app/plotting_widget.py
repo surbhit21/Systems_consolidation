@@ -156,7 +156,7 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',seqA =
         cbar.ax.tick_params(labelsize=colorbar_fontsize)
         h1 = -10
         for s in range(int(len(seqA)/2-1)):
-            print(seqA[2*s], seqA[2*s+1])
+            # print(seqA[2*s], seqA[2*s+1])
             plt.plot([seqA[2*s], seqA[2*s+1]], [h1, h1], 'k')
     plt.tight_layout()
     save_plot(fname)
