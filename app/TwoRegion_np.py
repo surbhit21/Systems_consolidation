@@ -236,7 +236,7 @@ E_ref = 0.7
 threshold = 5.0
 off_set = 0
 
-IP_plasticity_limit = 7
+IP_plasticity_limit = 1
 condition = ""
  
 FC_inp = 15
@@ -275,7 +275,7 @@ ctx_op_weights_all = []
 mtl_op_weights_all = []
 
 dob_HPC = []
-dob_ACC = [1,2,3,4,5,6,7]
+dob_ACC = []
 off_days = [0, 1, 2, 3, 7, 10]
 if not dob_ACC == []:
     condition += "ACCBlock{}".format(dob_ACC)
