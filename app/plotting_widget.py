@@ -1,5 +1,6 @@
 import os
 # from turtle import pd
+from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
@@ -8,7 +9,7 @@ from Utilities import center_of_mass_rowwise, center_of_mass_columnwise_blocked
 import seaborn as sns
 from sklearn.decomposition import PCA
 # import seaborn as sns
-
+fformat = [ ".pdf", ".png",".svg"]
 def ensure_dir_exists(file_path):
     """
     Ensures that the directory for the given file path exists.
@@ -40,7 +41,9 @@ def save_plot(filename):
     # Save the figure
     ensure_dir_exists(filename)
     plt.tight_layout()
-    plt.savefig(filename, bbox_inches='tight', dpi=300)
+    print("saving plot to:", filename)
+    for ff in fformat:
+        plt.savefig(filename+ff, bbox_inches='tight', dpi=300)
 
 def before_after_weights(initial_weights, final_weights,title1,title2,fname,cmaps = 'gray_r'):
     plt.figure(figsize=(10, 5))
@@ -146,18 +149,20 @@ def plot_activity_n_excitability_time(weights, titles, fname, cmaps='hot',seqA =
 
     for idx, (w, title) in enumerate(zip(weights, titles)):
         cmap = cmaps[idx] if isinstance(cmaps, list) else cmaps
-
+        # c_map = LinearSegmentedColormap.from_list("custom_cmap", ['#ffffff',cmap])
         ax = plt.subplot(1, num_plots, idx + 1)
         im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto')
         ax.set_title(title, fontsize=title_fontsize)
         ax.tick_params(labelsize=tick_fontsize)
-
+        ax.spines[['right', 'top']].set_visible(False)
         cbar = plt.colorbar(im)
         cbar.ax.tick_params(labelsize=colorbar_fontsize)
         h1 = -10
         for s in range(int(len(seqA)/2-1)):
             # print(seqA[2*s], seqA[2*s+1])
             plt.plot([seqA[2*s], seqA[2*s+1]], [h1, h1], 'k')
+        ax.set_xlabel('Time (a.u.)', fontsize=tick_fontsize)
+        ax.set_ylabel('Neurons', fontsize=tick_fontsize)
     plt.tight_layout()
     save_plot(fname)
     plt.show()
@@ -811,7 +816,7 @@ def plot_sessions_count_vs_activity_sem(
 
 def plot_firing_rate(timepoints, firing_rate, lab, fname=None,
                      xlabel="Time", ylabel="Firing Rate (Hz)", 
-                     c="r", threshold=5, ticksize=14):
+                     c="r", threshold=5, ticksize=14,title_fontsize=28):
     """
     Plot mean firing rate over time with a 95% CI band and an active threshold line.
 
@@ -871,11 +876,11 @@ def plot_firing_rate(timepoints, firing_rate, lab, fname=None,
               colors='k', linestyles=':', label="active threshold")
 
     # Cosmetics
-    ax.set_xlabel(xlabel, fontsize=ticksize + 2)
-    ax.set_ylabel(ylabel, fontsize=ticksize + 2)
-    ax.tick_params(axis='both', which='major', labelsize=ticksize)
+    ax.set_xlabel(xlabel, fontsize=title_fontsize)
+    ax.set_ylabel(ylabel, fontsize=title_fontsize)
+    ax.tick_params(axis='both', which='major', labelsize=title_fontsize)
     ax.set_ylim([-2, 20])
-    ax.legend(fontsize=ticksize)
+    ax.legend(fontsize=title_fontsize)
     fig.tight_layout()
 
     # Save or show
