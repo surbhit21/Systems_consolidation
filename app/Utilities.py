@@ -13,6 +13,238 @@ def center_of_mass_rowwise(matrix):
 def get_active_neurons(frs, th=1):
     return np.where(frs>th)[0]
 
+def output_firing_rate_to_freezing(output_firing_rate, freezing_fr_max=10.0):
+    """
+    Convert output-neuron firing rate to percent freezing.
+
+    The mapping is linear and clipped:
+        0 Hz -> 0% freezing
+        freezing_fr_max Hz -> 100% freezing
+    """
+    output_firing_rate = np.asarray(output_firing_rate, dtype=float)
+    if freezing_fr_max <= 0:
+        raise ValueError("freezing_fr_max must be positive")
+
+    freezing = 100.0 * output_firing_rate / freezing_fr_max
+    return np.clip(freezing, 0.0, 100.0)
+
+def average_freezing_by_day(freezing_history, ID, N_off_days, Nrep, t_off, IR, last_n_presentations=None):
+    """
+    Average percent freezing during each day's stimulation/replay windows.
+
+    Parameters
+    ----------
+    freezing_history : np.ndarray
+        Shape (sims, time), in percent freezing.
+    last_n_presentations : int or None
+        If set, average only the last N stimulus presentations/repetitions
+        for each day. If None, average all presentations.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (sims, days), one mean freezing value per simulation per day.
+    """
+    freezing_history = np.asarray(freezing_history, dtype=float)
+    if freezing_history.ndim != 2:
+        raise ValueError("freezing_history must have shape (sims, time)")
+
+    day_freezing = np.zeros((freezing_history.shape[0], N_off_days), dtype=float)
+    day_stride = Nrep * (t_off + IR) + ID
+    if last_n_presentations is None:
+        first_rep = 0
+    else:
+        if last_n_presentations <= 0:
+            raise ValueError("last_n_presentations must be positive or None")
+        first_rep = max(0, Nrep - last_n_presentations)
+
+    for day in range(N_off_days):
+        day_start = ID + day * day_stride
+        windows = []
+        for rep in range(first_rep, Nrep):
+            start = day_start + rep * (t_off + IR)
+            stop = start + t_off
+            if stop > freezing_history.shape[1]:
+                raise ValueError(
+                    "freezing_history is too short for day {}, rep {}: need {}, got {}".format(
+                        day, rep, stop, freezing_history.shape[1]
+                    )
+                )
+            windows.append(freezing_history[:, start:stop])
+
+        day_freezing[:, day] = np.concatenate(windows, axis=1).mean(axis=1)
+
+    return day_freezing
+
+def normalize_freezing_to_day0(day_freezing, eps=1e-12):
+    """
+    Normalize each simulation's day-wise freezing to its own day-0 freezing.
+
+    Returns freezing as percent of day 0, so day 0 is 100 when its baseline is
+    nonzero. Simulations with near-zero day-0 freezing are set to NaN.
+    """
+    day_freezing = np.asarray(day_freezing, dtype=float)
+    if day_freezing.ndim != 2:
+        raise ValueError("day_freezing must have shape (sims, days)")
+
+    day0 = day_freezing[:, [0]]
+    return np.divide(
+        100.0 * day_freezing,
+        day0,
+        out=np.full_like(day_freezing, np.nan),
+        where=np.abs(day0) > eps,
+    )
+
+def compare_freezing_across_days(day_freezing, alpha=0.05):
+    """
+    Test whether average freezing differs across days within simulations.
+
+    Uses a Friedman test for 3 or more days, and a Wilcoxon signed-rank test
+    for 2 days. The null hypothesis is no day-dependent change in freezing.
+    """
+    day_freezing = np.asarray(day_freezing, dtype=float)
+    if day_freezing.ndim != 2:
+        raise ValueError("day_freezing must have shape (sims, days)")
+
+    valid_rows = ~np.any(np.isnan(day_freezing), axis=1)
+    valid_freezing = day_freezing[valid_rows]
+    n_sims, n_days = valid_freezing.shape
+    if n_sims < 2 or n_days < 2:
+        return {
+            "test": "not_enough_data",
+            "statistic": np.nan,
+            "pvalue": np.nan,
+            "alpha": alpha,
+            "significant": False,
+            "n_sims": int(n_sims),
+            "n_days": int(n_days),
+            "annotation": "Day effect: insufficient data",
+        }
+
+    if np.allclose(valid_freezing, valid_freezing[:, [0]]):
+        return {
+            "test": "constant_across_days",
+            "statistic": 0.0,
+            "pvalue": 1.0,
+            "alpha": alpha,
+            "significant": False,
+            "n_sims": int(n_sims),
+            "n_days": int(n_days),
+            "annotation": "Day effect: n.s. (p = 1)",
+        }
+
+    try:
+        from scipy import stats
+
+        if n_days == 2:
+            result = stats.wilcoxon(valid_freezing[:, 0], valid_freezing[:, 1])
+            test = "wilcoxon_signed_rank"
+        else:
+            result = stats.friedmanchisquare(*[valid_freezing[:, day] for day in range(n_days)])
+            test = "friedman"
+
+        statistic = float(result.statistic)
+        pvalue = float(result.pvalue)
+        significant = bool(pvalue < alpha)
+        annotation = "Day effect: {} (p = {:.3g})".format(
+            "*" if significant else "n.s.",
+            pvalue,
+        )
+    except ImportError:
+        test = "scipy_unavailable"
+        statistic = np.nan
+        pvalue = np.nan
+        significant = False
+        annotation = "Day effect: scipy unavailable"
+
+    return {
+        "test": test,
+        "statistic": statistic,
+        "pvalue": pvalue,
+        "alpha": alpha,
+        "significant": significant,
+        "n_sims": int(n_sims),
+        "n_days": int(n_days),
+        "annotation": annotation,
+    }
+
+def compare_freezing_to_day0(day_freezing, alpha=0.05):
+    """
+    Compare each day's freezing level against day 0 within simulations.
+
+    Uses a one-sided paired Wilcoxon signed-rank test with the alternative
+    hypothesis that freezing on each later day is lower than freezing on day 0.
+    """
+    day_freezing = np.asarray(day_freezing, dtype=float)
+    if day_freezing.ndim != 2:
+        raise ValueError("day_freezing must have shape (sims, days)")
+
+    n_sims, n_days = day_freezing.shape
+    comparisons = []
+
+    def pvalue_to_stars(pvalue):
+        if np.isnan(pvalue):
+            return ""
+        if pvalue < 0.001:
+            return "***"
+        if pvalue < 0.01:
+            return "**"
+        if pvalue < alpha:
+            return "*"
+        return ""
+
+    try:
+        from scipy import stats
+    except ImportError:
+        for day in range(1, n_days):
+            comparisons.append({
+                "day": int(day),
+                "reference_day": 0,
+                "test": "scipy_unavailable",
+                "alternative": "day_lower_than_day0",
+                "statistic": np.nan,
+                "pvalue": np.nan,
+                "stars": "",
+                "significant": False,
+                "n_sims": int(n_sims),
+            })
+        return comparisons
+
+    for day in range(1, n_days):
+        pair = day_freezing[:, [0, day]]
+        valid_rows = ~np.any(np.isnan(pair), axis=1)
+        reference = pair[valid_rows, 0]
+        comparison = pair[valid_rows, 1]
+
+        if reference.size < 2:
+            statistic = np.nan
+            pvalue = np.nan
+            test = "not_enough_data"
+        elif np.allclose(reference, comparison):
+            statistic = 0.0
+            pvalue = 1.0
+            test = "constant_difference"
+        else:
+            result = stats.wilcoxon(comparison, reference, alternative="less")
+            statistic = float(result.statistic)
+            pvalue = float(result.pvalue)
+            test = "wilcoxon_signed_rank"
+
+        stars = pvalue_to_stars(pvalue)
+        comparisons.append({
+            "day": int(day),
+            "reference_day": 0,
+            "test": test,
+            "alternative": "day_lower_than_day0",
+            "statistic": statistic,
+            "pvalue": pvalue,
+            "stars": stars,
+            "significant": bool(stars),
+            "n_sims": int(reference.size),
+        })
+
+    return comparisons
+
 def rowwise_correlation(mat1, mat2):
     """
     Computes Pearson correlation coefficient between corresponding rows of two matrices.

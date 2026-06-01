@@ -6,7 +6,7 @@ from plotting_widget import *
 from Utilities import average_firing_rates_with_active, ensamble_overlap
 from tqdm import trange
 
-start_seed = 2026
+start_seed = 5
 np.random.seed(start_seed)
 
 
@@ -20,7 +20,7 @@ def relu(x):
     return np.maximum(0, x)
 
 
-class twolayer_FF:
+class twolayer_input_FF:
     def __init__(self, n_inp, n_MTL, n_CTX, baseline_e, base_e_ctx, tau=20.0, dt=1.0, act='relu',
                  lr=1/800, decay_r=1/1000,
                  lr_ctx=1/1200, decay_r_ctx=1e-5,
@@ -29,7 +29,7 @@ class twolayer_FF:
                  threshold=5,
                  lr_op=1/1000,
                  I0=1, I1=0.05, I2=0.001, Iw=0.01,
-                 I0_ctx=1, I1_ctx=0.05, I2_ctx=0.001, Iw_ctx=0.01, tag_threshold=6.0):
+                 I0_ctx=1, I1_ctx=0.05, I2_ctx=0.001, Iw_ctx=0.01, tag_threshold=2.):
         # Store population sizes and integration constants.
         self.n_MTL = n_MTL
         self.n_CTX = n_CTX
@@ -98,9 +98,14 @@ class twolayer_FF:
         self.tagged_ACC = np.zeros(n_CTX)
         self.tagged_HPC = np.zeros(n_MTL)
         
-        # External input enters MTL through input_w; recurrent weights within
-        # MTL and CTX are learned during the simulation.
-        self.input_w = np.abs(np.random.normal(0, 0.05, size=(n_inp, n_MTL)))
+        # Explicit input layer projections. The input-to-HPC and input-to-CTX
+        # weights are independently randomized, then row-normalized so each
+        # input-layer unit has fixed total outgoing strength while target
+        # neurons receive randomly varied input.
+        self.input_w_hpc = np.abs(np.random.normal(0, 0.05, size=(n_inp, n_MTL)))
+        self.input_w_ctx = np.abs(np.random.normal(0, 0.05, size=(n_inp, n_CTX)))
+        self.input_w_hpc = self._normalize_input_rows(self.input_w_hpc)
+        self.input_w_ctx = self._normalize_input_rows(self.input_w_ctx)
         self.rec_w = np.zeros((n_MTL, n_MTL))
         self.rec_w_ctx = np.zeros((self.n_CTX, self.n_CTX))
         
@@ -113,16 +118,19 @@ class twolayer_FF:
         self.rates = np.zeros(n_MTL)
         self.op_rate = np.zeros(self.op_neuron)
 
-    def step(self, input_FR, input_FR_ctx, op_FR, op_signal=0, day_c=0, phase=None, ct=1):
+    def step(self, input_layer_FR, op_FR, op_signal=0, day_c=0, phase=None, ct=1):
         """
         Advance the network by one Euler timestep.
 
         The method updates MTL, CTX, and output firing rates, applies activity
         tagging, and performs Hebbian updates for the plastic connections.
         """
-        # Compute synaptic input to each population before inhibition.
-        input_vector = input_FR + self.rec_w .dot(self.rates) - self.FB_CTX_MTL.dot(self.rates_ctx)
-        input_CTX = input_FR_ctx + self.rec_w_ctx.dot(self.rates_ctx) + (self.gain_FF * self.FF_MTL_CTX.dot(self.rates))
+        # Project the explicit input layer into both RNNs before adding
+        # recurrent and inter-region drive.
+        input_hpc = input_layer_FR.dot(self.input_w_hpc)
+        input_ctx_external = input_layer_FR.dot(self.input_w_ctx)
+        input_vector = input_hpc + self.rec_w .dot(self.rates) - self.FB_CTX_MTL.dot(self.rates_ctx)
+        input_CTX = input_ctx_external + self.rec_w_ctx.dot(self.rates_ctx) + (self.gain_FF * self.FF_MTL_CTX.dot(self.rates))
         input_op = op_FR + self.ctx_op_w.dot(self.rates_ctx) #+ self.mtl_op_w @ self.rates
         
         # Population-wide inhibition grows with total and squared activity.
@@ -131,9 +139,9 @@ class twolayer_FF:
         
         # Tag neurons the first time they exceed the activity threshold. During
         # burnoff, day_c is negative, so tags can be driven below zero if active.
-        self.tagged_HPC = self.tagged_HPC + (((self.rates >= self.tag_threshold).astype(float) * 
+        self.tagged_HPC = self.tagged_HPC + (((self.rates > self.tag_threshold).astype(float) * 
                                                (self.tagged_HPC == 0).astype(float)) * day_c)
-        self.tagged_ACC = self.tagged_ACC + (((self.rates_ctx >= self.tag_threshold).astype(float) * 
+        self.tagged_ACC = self.tagged_ACC + (((self.rates_ctx > self.tag_threshold).astype(float) * 
                                                (self.tagged_ACC == 0).astype(float)) * day_c)
         
         # Total input
@@ -165,11 +173,11 @@ class twolayer_FF:
 
 
         # Keep firing rates in a bounded physiological range for numerical stability.
-        self.rates = np.clip(self.rates, 0.0, 15.)
-        self.rates_ctx = np.clip(self.rates_ctx, 0.0, 15.)
+        self.rates = np.clip(self.rates, 0.0, 10.)
+        self.rates_ctx = np.clip(self.rates_ctx, 0.0, 10.)
         
         # Hebbian plasticity in MTL recurrent weights, restricted to active units.
-        post_mask = self.rates >= self.plas_threshold
+        post_mask = self.rates > self.plas_threshold
         heb_dw = self.on * self.lr * np.outer(self.rates * post_mask, self.rates * post_mask) * self.dt
         decay = self.decay_r * self.rec_w * self.dt
         self.rec_w += (heb_dw - decay)
@@ -185,10 +193,8 @@ class twolayer_FF:
         # self.mtl_op_w += (hebb_mtl_op - decay_mtl_op)
         
         # Recompute the active mask for CTX before updating cortical weights.
-        post_mask = self.rates_ctx >= self.plas_threshold
-        # tag_gate = np.ones(self.n_CTX)
-        # # tag_gate[self.tagged_ACC == 1.] = 1.0
-        hebb_dw_ctx = self.on_ctx * self.lr_ctx * np.outer(self.rates_ctx * post_mask , self.rates_ctx * post_mask ) * self.dt
+        post_mask = self.rates_ctx > self.plas_threshold
+        hebb_dw_ctx = self.on_ctx * self.lr_ctx * np.outer(self.rates_ctx * post_mask, self.rates_ctx * post_mask) * self.dt
         decay_ctx = self.decay_r_ctx * self.rec_w_ctx * self.dt
         self.rec_w_ctx += (hebb_dw_ctx - decay_ctx)
         
@@ -229,6 +235,16 @@ class twolayer_FF:
         scale = np.where(col_sums > eps, target_sum / col_sums, np.ones_like(col_sums))
         self.rec_w = self.rec_w * scale
 
+    @staticmethod
+    def _normalize_input_rows(weights, target_sum=1.0, eps=1e-12):
+        row_sums = weights.sum(axis=1, keepdims=True)
+        return np.divide(
+            weights * target_sum,
+            row_sums,
+            out=np.zeros_like(weights),
+            where=row_sums > eps,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Main simulation setup
@@ -245,10 +261,10 @@ input_history = []
 N_off_days = 11
 N_neurons_per_day = 20
 n = 10 + (N_off_days) * N_neurons_per_day
-n_inp = n
+n_inp = 30
 n_ctx = n
-E_fl = 2.4
-E_fl_ctx = 2.4
+E_fl = 2.5
+E_fl_ctx = 2.5
 E_mod = 5.0
 max_e = 10
 E_ref = 0.7
@@ -262,14 +278,20 @@ condition = ""
 FC_inp = 15
 FC_d0_inp = 15
 FC_inp_ctx = 15
-input = FC_inp * np.ones(n_inp)
+n_active = 10
+mem_a = np.array([0]*n_inp)
+mem_b = np.array([0]*n_inp)
+mem_a[:n_active] = 1
+mem_b[n_active:2*n_active] = 1
+input_a = FC_inp * mem_a
+input_b = FC_inp * mem_b
 zero_input = np.zeros(n_inp)
 mu_ex = 0
 sigma_ex = 1.0
 
 ID = 1000
 dt = 1
-NUM_SIM = 10
+NUM_SIM = 5
 t_off = 100
 IR = 100
 Nrep = 10
@@ -293,9 +315,11 @@ ctx_mtl_weights_all = []
 
 ctx_op_weights_all = []
 mtl_op_weights_all = []
+input_hpc_weights_all = []
+input_ctx_weights_all = []
 
 dob_HPC = []
-dob_ACC = [2,3,4]
+dob_ACC = []
 off_days = [0, 1, 2, 3, 7, 10]
 
 # Build a descriptive simulation name from blockade and plasticity settings.
@@ -306,11 +330,11 @@ if not dob_HPC == []:
 else:
     condition +="CNT"
 if E_mod == 0.0:
-    sim_name = "{}_fast_drift_wo_IP_lowI".format(condition)
+    sim_name = "{}_input_layer_fast_drift_wo_IP_lowI".format(condition)
 else:
-    sim_name = "{}_fast_drift_with_limited{}_IP_lowI".format(condition, IP_plasticity_limit)
+    sim_name = "{}_input_layer_fast_drift_with_limited{}_IP_lowI".format(condition, IP_plasticity_limit)
 
-notes = "2 region model with slow drift due to low excitability boosts in both regions with intrinsic plasticity. ACC neurons that are part of the FC engram get an extra boost in excitability during off days."
+notes = "2 region model with an explicit input layer projecting through random normalized connectivity to both HPC/MTL and CTX/ACC RNNs."
 
 # Run independent simulations with shifted random seeds.
 for i in trange(NUM_SIM):
@@ -322,16 +346,16 @@ for i in trange(NUM_SIM):
     base_E = np.abs(np.random.normal(mu_ex, sigma_ex, size=(n,)))
     base_e_ctx = np.abs(np.random.normal(mu_ex, sigma_ex, size=(n_ctx,)))
     
-    nn = twolayer_FF(n_inp=n_inp, n_MTL=n, n_CTX=n_ctx, baseline_e=base_E.copy(),
-                     base_e_ctx=base_e_ctx.copy(), tau=20.0, dt=dt, act='relu',
-                     lr=1./3000, decay_r=1./3500,
-                     lr_ctx=2e-6, decay_r_ctx=0.,
-                     lr_mtl_ctx=1/2000., decay_mtl_ctx=1e-6,
-                     lr_ctx_mtl=0., decay_ctx_mtl=0.,
-                     threshold=threshold,
-                     lr_op=1e-2,
-                     I0=5, I1=0.7, I2=0.04,
-                     I0_ctx=2., I1_ctx=0.5, I2_ctx=0.04)
+    nn = twolayer_input_FF(n_inp=n_inp, n_MTL=n, n_CTX=n_ctx, baseline_e=base_E.copy(),
+                           base_e_ctx=base_e_ctx.copy(), tau=20.0, dt=dt, act='relu',
+                           lr=1./3000, decay_r=1./3500,
+                           lr_ctx=2e-6, decay_r_ctx=0.,
+                           lr_mtl_ctx=1/3000., decay_mtl_ctx=1e-6,
+                           lr_ctx_mtl=0., decay_ctx_mtl=0.,
+                           threshold=threshold,
+                           lr_op=1e-2,
+                           I0=5, I1=0.7, I2=0.04,
+                           I0_ctx=2., I1_ctx=0.6, I2_ctx=0.04)
     
     input_history = []
     FR_history = []
@@ -352,7 +376,7 @@ for i in trange(NUM_SIM):
     
     nn.excitability = base_E.copy()
     day = 0
-   
+    
     # Prime the first day's neuron cohort with elevated excitability.
     nn.excitability[off_set+(day)*N_neurons_per_day:off_set+(day)*N_neurons_per_day+N_neurons_per_day] += E_fl
     nn.excitability_ctx = base_e_ctx.copy()
@@ -360,7 +384,7 @@ for i in trange(NUM_SIM):
     
     # Initial silent/burnoff period to settle rates before day 0 stimulation.
     for t in range(ID):
-        next_FR, FR_ctx, FR_op = nn.step(zero_input, zero_input, 0, 0, day_c=-1, phase="Burnoff", ct=total_time+t)
+        next_FR, FR_ctx, FR_op = nn.step(zero_input, 0, 0, day_c=-1, phase="Burnoff", ct=total_time+t)
         FR_history.append(next_FR)
         FR_history_ctx.append(FR_ctx)
         FR_op_history.append(FR_op)
@@ -382,10 +406,9 @@ for i in trange(NUM_SIM):
         new_neurons = range(off_set + day*N_neurons_per_day, off_set + day*N_neurons_per_day + N_neurons_per_day, 1)
         
         # During the intrinsic-plasticity window, previously tagged FC neurons
-        # receive an additional CTX excitability boost.
+        # receive an exponentially decaying CTX excitability boost.
         if day <= IP_plasticity_limit:
             FC_ctx_active_neurons = np.where(nn.tagged_ACC == 1.)[0]
-            FC_HPC_active_neurons = np.where(nn.tagged_HPC == 1.)[0]
             ie_gain = E_mod * np.exp(-day / tau_IE)
             nn.excitability_ctx[FC_ctx_active_neurons] += ie_gain
             for n1 in new_neurons:
@@ -394,8 +417,6 @@ for i in trange(NUM_SIM):
         else:
             nn.excitability_ctx[new_neurons] += E_fl_ctx
         
-        ctx_inp = FC_inp_ctx
-
         # Day 0 is encoding with output learning; later days replay the input
         # without output supervision.
         if day == 0:
@@ -403,12 +424,10 @@ for i in trange(NUM_SIM):
             op_learning = 1.
             phase = "Encoding"
             input = FC_d0_inp * np.ones(n_inp)
-            ctx_inp = input
         else:
             op_inp = 0.
             op_learning = 0.
             input = FC_inp * np.ones(n_inp)
-            ctx_inp = input
             phase = "NREM"
         
         for rep in range(Nrep):
@@ -428,13 +447,13 @@ for i in trange(NUM_SIM):
             
             # Stimulation/replay epoch.
             for t in range(t_off):
-                next_FR, FR_ctx, FR_op = nn.step(input, ctx_inp, op_inp, op_learning, day_c=day+1, phase=phase, ct=total_time+t)
+                next_FR, FR_ctx, FR_op = nn.step(mem_a, op_inp, op_learning, day_c=day+1, phase=phase, ct=total_time+t)
                 FR_history.append(next_FR)
                 FR_history_ctx.append(FR_ctx)
                 FR_op_history.append(FR_op)
                 EX_history.append(nn.excitability.copy())
                 EX_history_ctx.append(nn.excitability_ctx.copy())
-                input_history.append(input.copy())
+                input_history.append(mem_a.copy())
             
             day_activity.append(np.mean(FR_history[-t_off//2:], axis=0))
             day_activity_ctx.append(np.mean(FR_history_ctx[-t_off//2:], axis=0))
@@ -443,7 +462,7 @@ for i in trange(NUM_SIM):
             
             # Inter-repetition rest interval with no external drive.
             for t in range(IR):
-                next_FR, FR_ctx, FR_op = nn.step(zero_input, zero_input, 0, 0, day_c=day+1, phase="IR", ct=total_time)
+                next_FR, FR_ctx, FR_op = nn.step(zero_input, 0, 0, day_c=day+1, phase="IR", ct=total_time)
                 FR_history.append(next_FR)
                 FR_history_ctx.append(FR_ctx)
                 FR_op_history.append(FR_op)
@@ -472,7 +491,7 @@ for i in trange(NUM_SIM):
         
         # Post-day offline interval with feedforward MTL -> CTX drive disabled.
         for t in range(ID):
-            next_FR, FR_ctx, FR_op = nn.step(zero_input, zero_input, 0, day_c=day+1, phase="REM", ct=total_time+t)
+            next_FR, FR_ctx, FR_op = nn.step(zero_input, 0, day_c=day+1, phase="REM", ct=total_time+t)
             FR_history.append(next_FR)
             FR_history_ctx.append(FR_ctx)
             FR_op_history.append(FR_op)
@@ -497,7 +516,9 @@ for i in trange(NUM_SIM):
     ctx_mtl_weights_all.append(ctx_mtl_weights)
     mtl_op_weights_all.append(mtl_op_weights)
     ctx_op_weights_all.append(ctx_op_weights)
-    print("ACC tagged:", (nn.tagged_ACC == 1.).sum(), "HPC tagged:", (nn.tagged_HPC == 1.).sum())
+    input_hpc_weights_all.append(nn.input_w_hpc.copy())
+    input_ctx_weights_all.append(nn.input_w_ctx.copy())
+
 # Convert per-simulation Python lists to arrays for saving and plotting.
 FR_history_all = np.stack(FR_history_all)
 FR_ctx_history_all = np.stack(FR_ctx_history_all)
@@ -513,6 +534,8 @@ mtl_ctx_weights_all = np.stack(mtl_ctx_weights_all)
 ctx_mtl_weights_all = np.stack(ctx_mtl_weights_all)
 mtl_op_weights_all = np.stack(mtl_op_weights_all)
 ctx_op_weights_all = np.stack(ctx_op_weights_all)
+input_hpc_weights_all = np.stack(input_hpc_weights_all)
+input_ctx_weights_all = np.stack(input_ctx_weights_all)
 
 op_data_folder = "./data/{}".format(sim_name)
 op_plot_folder = "./plots/{}".format(sim_name)
@@ -535,17 +558,20 @@ np.save("{}/ctx_op_weights.npy".format(op_data_folder), ctx_op_weights_all)
 np.save("{}/rec_ctx_weights.npy".format(op_data_folder), rec_ctx_weights_all)
 np.save("{}/mtl_ctx_weights.npy".format(op_data_folder), mtl_ctx_weights_all)
 np.save("{}/ctx_mtl_weights.npy".format(op_data_folder), ctx_mtl_weights_all)
+np.save("{}/input_hpc_weights.npy".format(op_data_folder), input_hpc_weights_all)
+np.save("{}/input_ctx_weights.npy".format(op_data_folder), input_ctx_weights_all)
 
 # Store model and simulation parameters alongside the generated arrays.
 sim_params = {
     "n": n,
     "n_inp": n_inp,
     "n_ctx": n_ctx,
+    "input_layer_to_hpc": "random non-negative row-normalized weights",
+    "input_layer_to_ctx": "random non-negative row-normalized weights",
     "FC_inp": FC_inp,
     "E_fl": E_fl,
     "E_fl_ctx": E_fl_ctx,
     "E_mod": E_mod,
-    "tau_IE": tau_IE,
     "threshold": threshold,
     "ID": ID,
     "N_off_days": N_off_days,
@@ -561,7 +587,8 @@ sim_params = {
     "off_days": off_days,
     "t_series": t_series,
     "IP_plasticity_limit": IP_plasticity_limit,
-    "freezing_fr_max":8.0
+    "tau_IE": tau_IE,
+    "freezing_fr_max":10.0
 }
 
 data = {
@@ -584,8 +611,7 @@ data = {
         "I1": nn.I1,
         "I2": nn.I2,
         "mu_ex": mu_ex,
-        "sigma_ex": sigma_ex,
-        "tag_threshold": nn.tag_threshold
+        "sigma_ex": sigma_ex
     },
     "simulation_params": sim_params
 }
@@ -596,5 +622,5 @@ with open(filename, "w") as f:
 
 # Drop into the debugger before plotting, which is useful for inspecting arrays
 # interactively after a simulation finishes.
-breakpoint()
+# breakpoint()
 PlotAll(input_data_folder=op_data_folder, op_plot_folder=op_plot_folder)

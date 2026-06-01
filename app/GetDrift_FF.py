@@ -205,10 +205,10 @@ FR_history_all = np.stack(FR_history_all)
 # input_history = np.stack(input_history)
 EX_history_all = np.stack(EX_history_all)
 last_activity_all = np.stack(last_activity_all)
-np.save("./data/Reimagined3/FR_history.npy",FR_history_all)
-np.save("./data/Reimagined3/EX_history.npy",EX_history_all)
-np.save("./data/Reimagined3/last_activity.npy",last_activity_all)
-# np.save("./data/Reimagined3/input_history.npy",input_history_all)  
+np.save("./data/Reimagined_3/FR_history.npy",FR_history_all)
+np.save("./data/Reimagined_3/EX_history.npy",EX_history_all)
+np.save("./data/Reimagined_3/last_activity.npy",last_activity_all)
+# np.save("./data/Reimagined_3/input_history.npy",input_history_all)  
 sim_params = {
     "n": n,
     "n_inp": n_inp,
@@ -235,24 +235,24 @@ data = {
         },
         "simulation_params": sim_params
     }
-filename = "./plots/Reimagined3/all_params.json"
+filename = "./plots/Reimagined_3/all_params.json"
 
 with open(filename, "w") as f:
         json.dump(data, f, indent=4)
     # print(f"All parameters saved to {filename}")
-plot_corr_matrix(last_activity, fname="./plots/Reimagined3/corr_matrix.png")
+plot_corr_matrix(last_activity, fname="./plots/Reimagined_3/corr_matrix.png")
 
 FR_history_th = (FR_history_all > threshold).astype(float)*FR_history_all
 breakpoint()
 plot_activity_n_excitability_time([FR_history_th[0].T,EX_history_all[0].T],
                        titles=['Neuronal Activity',
                                 "Neuronal Excitability"],
-                       fname="./plots/Reimagined3/Activity_n_excitability.png",
+                       fname="./plots/Reimagined_3/Activity_n_excitability.png",
                        cmaps=['Blues', 'Greens'])
 labs = ["FC"] + [f"Off {i+1}" for i in range(N_off_days)]
 plot_weights_over_time(rec_weights_all[0],
                        titles=  labs,
-                       fname="./plots/Reimagined3/Rec_w.png",
+                       fname="./plots/Reimagined_3/Rec_w.png",
                        cmaps='gray_r')
 
 # counts = np.sum(last_activity[0,0] > threshold, axis=0)
@@ -267,7 +267,7 @@ plot_weights_over_time(rec_weights_all[0],
 # plt.ylabel("Number of neurons")
 # plt.title("Distribution of neuron activity across sessions")
 # plt.grid(True, linestyle="--", alpha=0.5)
-# save_plot("./plots/Reimagined3/session_hist.png")
+# save_plot("./plots/Reimagined_3/session_hist.png")
 # plt.show()
 
 # FC_active_neurons = np.where(last_activity[0, :] > threshold)[0]
@@ -280,29 +280,29 @@ plot_weights_over_time(rec_weights_all[0],
 cbars = ["fff5f0ff","fdcab5ff","fc8a6aff","f96044ff","e83429ff","c3161bff","980c13ff",]
 xlabs = ["Off 1","Off 2","Off 3","Off 4","Off 5","Recall"]
 Title = "Ensemble similarity of encoding and offline + recall"
-# plot_row_correlations(last_activity[0,0],last_activity[0,1:], xlabs=xlabs,title=Title,fname="./plots/Reimagined3/encoding_corr.png", use_bar_plot=True)
+# plot_row_correlations(last_activity[0,0],last_activity[0,1:], xlabs=xlabs,title=Title,fname="./plots/Reimagined_3/encoding_corr.png", use_bar_plot=True)
 mean_corr, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     last_activity_all,                # shape: (sims, time, neurons)
     ref_time_idx=0,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=False,
     title="Encoding vs. others (mean ± SD across sims)",
-    fname="./plots/Reimagined3/encoding_vs_others_mean_std.png",
-    bcmap="Reds",
+    fname="./plots/Reimagined_3/encoding_vs_others_mean_std.png",
+    cmap="Reds",
     bar_plot=True
 )
 
 xlabs = ["Encoding", "Off 1","Off 2","Off 3","Off 4","Off 5"]
 Title = "Ensemble similarity of recall and offline + encoding"
-# plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined3//Recall_corr.png", use_bar_plot=True)
+# plot_row_correlations(last_activity[0,-1],last_activity[0,:-1], xlabs=xlabs,title=Title,fname="./plots/Reimagined_3//Recall_corr.png", use_bar_plot=True)
 last_activity_all, std_corr, per_sim_corr, idx = plot_mean_std_corr_over_time(
     last_activity_all,                # shape: (sims, time, neurons)
     ref_time_idx=-1,         # Encoding
     xlabels=xlabs,         # must match number of non-ref times
     include_ref_bar=False,
     title="Encoding vs. others (mean ± SD across sims)",
-    fname="./plots/Reimagined3/recall_vs_others_mean_std.png",
-    bcmap="Reds",
+    fname="./plots/Reimagined_3/recall_vs_others_mean_std.png",
+    cmap="Reds",
     bar_plot=True
 
 )

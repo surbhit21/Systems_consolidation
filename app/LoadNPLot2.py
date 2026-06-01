@@ -1,13 +1,19 @@
 import numpy as np
 from plotting_widget import *
-import matplotlib.pyplot as plt
 import json
+import os
+from Utilities import (
+    average_freezing_by_day,
+    compare_freezing_to_day0,
+    normalize_freezing_to_day0,
+    output_firing_rate_to_freezing,
+)
 
 # choose the desired format (0 for PDF, 1 for PNG)
 
-def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder="./plots/CNT_fast_drift_wo_IP_lowI"):
-    # input_data_folder = "./data/CNT_fast_drift_wo_IP_lowI"
-    # op_plot_folder = "./plots/CNT_fast_drift_wo_IP_lowI"
+def PlotAll(input_data_folder="./data/CNT_fast_drift_with_limited7_IP_lowI", op_plot_folder="./plots/CNT_fast_drift_with_limited7_IP_lowI"):
+    # input_data_folder = "./data/CNT_fast_drift_with_limited7_IP_lowI"
+    # op_plot_folder = "./plots/CNT_fast_drift_with_limited7_IP_lowI"
     # Path to your JSON file
     json_path = "{}/all_params.json".format(input_data_folder)
     dop = 2
@@ -31,7 +37,10 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
     # E_mod = sim_params["E_mod"]
     # t_off = sim_params["t_off"]
     IR = sim_params["IR"]
-    # Nrep = sim_params["Nrep"]
+    Nrep = sim_params["Nrep"]
+    t_off = sim_params["t_off"]
+    time_per_day = Nrep * (t_off + IR) + ID
+    freezing_presentations_to_average = [3, 4, 5, 6]
     # start_seed = sim_params["start_seed"]
     # max_e = sim_params["max_e"]
     total_time = sim_params["total_time"]
@@ -40,11 +49,44 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
     # threshold = 2 
     
 
+    A_0 = sim_params["E_mod"]#2.4
+    t1 = np.arange(0,11,1)
+    tau = sim_params["tau_IE"]
+    A_t = np.zeros_like(t1)
+    A_t = A_0 *(np.exp(-(t1-1)/tau))
+    # print(A_t,t1)
+    A_t[0] = 0
+    fig,ax = plt.subplots(figsize = (6,3))
+    ax.plot(t1,A_t,'o-k')
+    ax.hlines(y=0,xmin=0,xmax=10,linestyle='--',color = 'k',alpha = 0.5)
+    ax.set_xlabel("Days",fontsize=PLOT_LABEL_FONTSIZE)
+    ax.set_ylabel(r"$\Delta \mathrm{e}_{i}^{ACC}$",fontsize=PLOT_LABEL_FONTSIZE)
+    ax.spines[['top','right']].set_visible(False)
+    ax.set_xticks(t1)
+    ax.set_yticks(np.arange(0, A_0+0.5, 1.))
+    ax.tick_params(labelsize=PLOT_TICK_FONTSIZE)
+    # ax.set_yticks(fontsize = 18)
+    # ax.set_yticks(fontsize = 18)
+    plt.tight_layout()
+    save_plot("{}/excitability_boost_decay".format(op_plot_folder))
+    plt.close()
+
     last_activity_all = np.load("{}/last_activity.npy".format(input_data_folder)) # shape: (sims, time, neurons)
     last_activity_ctx_all = np.load("{}/last_activity_ctx.npy".format(input_data_folder)) # shape: (sims, time, neurons)
     FR_history_all = np.load("{}/FR_history.npy".format(input_data_folder)) # shape: (sims, time, neurons)
     EX_history_all = np.load("{}/EX_history.npy".format(input_data_folder)) # shape:
     FR_op_history_all = np.load("{}/FR_history_op.npy".format(input_data_folder))
+    freezing_fr_max = sim_params.get("freezing_fr_max", 10.0)
+    freezing_path = "{}/freezing_history.npy".format(input_data_folder)
+    if os.path.exists(freezing_path):
+        freezing_history_all = np.load(freezing_path)
+    else:
+        freezing_history_all = output_firing_rate_to_freezing(
+            FR_op_history_all[:, :, 0],
+            freezing_fr_max=freezing_fr_max,
+        )
+    # breakpoint()
+
     last_activity_all_ctx = np.load("{}/last_activity_ctx.npy".format(input_data_folder)) # shape: (sims, time, neurons)
     FR_history_all_ctx = np.load("{}/FR_history_ctx.npy".format(input_data_folder)) # shape: (sims, time, neurons)
     EX_history_all_ctx = np.load("{}/EX_history_ctx.npy".format(input_data_folder)) # shape: 
@@ -54,32 +96,87 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
     last_activity_th = (last_activity_all > threshold).astype(float)*last_activity_all
     last_activity_th_ctx = (last_activity_all_ctx > threshold).astype(float)*last_activity_all_ctx
     plot_engram_size(last_activity_all, threshold=threshold, title = "Engram size (HPC)",fname="{}/engram_size_HPC".format(op_plot_folder))
-    plot_engram_size(last_activity_all_ctx, threshold=threshold,title = "Engram size (CTX)", fname="{}/engram_size_CTX".format(op_plot_folder))
+    plot_engram_size(last_activity_all_ctx, threshold=threshold,title = "Engram size (ACC)", fname="{}/engram_size_ACC".format(op_plot_folder))
 
     # breakpoint()
     # total_time = 22000
     plot_corr_matrix(last_activity_th[0], fname="{}/corr_matrix".format(op_plot_folder))
     plot_corr_matrix(last_activity_th_ctx[0], fname="{}/corr_matrix_ctx".format(op_plot_folder))
     timepoints = np.arange(0,total_time,1)*1
+    plot_firing_rate(timepoints, freezing_history_all,lab = "Freezing",
+                    xlabel="Time (s)", ylabel="Freezing (%)", c="r",fname= "{}/freezing_level".format(op_plot_folder),threshold=80, ylim=[0, 200])
+    for n_presentations in freezing_presentations_to_average:
+        suffix = "last{}presentations".format(n_presentations)
+        day_freezing = average_freezing_by_day(
+            freezing_history_all,
+            ID=ID,
+            N_off_days=N_off_days,
+            Nrep=Nrep,
+            t_off=t_off,
+            IR=IR,
+            last_n_presentations=n_presentations,
+        )
+        np.save("{}/average_freezing_by_day_{}.npy".format(input_data_folder, suffix), day_freezing)
+        freezing_day_stats = compare_freezing_to_day0(day_freezing)
+        freezing_day_stats = {
+            "presentations_averaged": n_presentations,
+            "comparisons": freezing_day_stats,
+        }
+        with open("{}/average_freezing_by_day_stats_{}.json".format(input_data_folder, suffix), "w") as f:
+            json.dump(freezing_day_stats, f, indent=4)
+        plot_average_freezing_boxplot(
+            day_freezing,
+            fname="{}/average_freezing_by_day_boxplot_{}".format(op_plot_folder, suffix),
+            xlabels=[str(day) for day in range(N_off_days)],
+            day0_comparisons=freezing_day_stats["comparisons"],
+            title="Average freezing by day (last {} presentations)".format(n_presentations),
+        )
+
+        normalized_day_freezing = normalize_freezing_to_day0(day_freezing)
+        np.save(
+            "{}/normalized_freezing_by_day_{}.npy".format(input_data_folder, suffix),
+            normalized_day_freezing,
+        )
+        normalized_freezing_day_stats = compare_freezing_to_day0(normalized_day_freezing)
+        normalized_freezing_day_stats = {
+            "presentations_averaged": n_presentations,
+            "comparisons": normalized_freezing_day_stats,
+        }
+        with open("{}/normalized_freezing_by_day_stats_{}.json".format(input_data_folder, suffix), "w") as f:
+            json.dump(normalized_freezing_day_stats, f, indent=4)
+        plot_average_freezing_boxplot(
+            normalized_day_freezing,
+            fname="{}/normalized_freezing_by_day_boxplot_{}".format(op_plot_folder, suffix),
+            xlabels=[str(day) for day in range(N_off_days)],
+            day0_comparisons=normalized_freezing_day_stats["comparisons"],
+            title="Freezing normalized to day 0 (last {} presentations)".format(n_presentations),
+            ylabel="Freezing (% of day 0)",
+            ylim=(0, 140),
+            star_y=125,
+        )
+    # breakpoint()
     plot_firing_rate(timepoints, FR_op_history_all[:, :, 0],lab = "Output neuron",
                     xlabel="Time (s)", ylabel="Firing Rate (Hz)", c="r",fname= "{}/OP_neuron_activity".format(op_plot_folder),threshold=8)
-    # breakpoint()
-
-    plot_activity_n_excitability_time([FR_history_th[-2].T,FR_history_th_ctx[-2].T],
+    sim_to_plot = 3
+    plot_activity_n_excitability_time([FR_history_th[sim_to_plot].T,FR_history_th_ctx[sim_to_plot].T],
                         titles=['Neuronal Activity (HPC)',
-                                    'Neuronal Activity (CTX)'],
+                                    'Neuronal Activity (ACC)'],
                         seqA=seqA,
                         fname="{}/Activity".format(op_plot_folder),
-                        cmaps=['Oranges', 'Blues'])
+                        cmaps=['OrRd', 'Blues'],
+                        time_per_day=time_per_day,
+                        day_zero_time=ID)
 
 
-    plot_activity_n_excitability_time([EX_history_all[-2].T,EX_history_all_ctx[-2].T,input_history[-2].T],
+    plot_activity_n_excitability_time([EX_history_all[sim_to_plot].T,EX_history_all_ctx[sim_to_plot].T,input_history[sim_to_plot].T],
                         titles=['Neuronal Excitability (HPC)',
-                                    'Neuronal Excitability (CTX)',
+                                    'Neuronal Excitability (ACC)',
                                     'Input Activity'],
                         seqA=seqA,
                         fname="{}/Excitability".format(op_plot_folder),
-                        cmaps=['Oranges', 'Blues','Grays'])
+                        cmaps=['Oranges', 'Blues','Grays'],
+                        time_per_day=time_per_day,
+                        day_zero_time=ID)
     # labs = ["FC"] t [f"Off {it1}" for i in range(N_off_days)]
     # plot_weights_over_time(rec_weights_all[0],
     #                        titles=  labs,
@@ -107,7 +204,7 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
         include_ref_bar=True,
         title="Cell population \n activity correlation",
         fname="{}/encoding_vs_others_mean_std_ctx".format(op_plot_folder),
-        cmap = "Greens"
+        cmap = "Blues"
     )
     mean_DR = np.sum(1-mean_corr)/(N_off_days)
     mean_DR_ctx = np.sum(1-mean_corr_ctx)/(N_off_days)
@@ -134,7 +231,7 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
         include_ref_bar=True,
         title="Cell population \n activity correlation",
         fname="{}/off1_vs_others_mean_std_ctx".format(op_plot_folder),
-        cmap = "Greens"
+        cmap = "Blues"
     )
 
     xlabs = [f"{i}" for i in range(N_off_days)]
@@ -159,7 +256,7 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
         include_ref_bar=True,
         title="Cell population \n activity correlation",
         fname="{}/recall_vs_others_mean_std_ctx".format(op_plot_folder),
-        cmap = "Greens",
+        cmap = "Blues",
         
 
     )
@@ -215,7 +312,7 @@ def PlotAll(input_data_folder="./data/CNT_fast_drift_wo_IP_lowI", op_plot_folder
 
 
 
-def PlotAll3R(input_data_folder="../data/3R_CNT_fast_drift_with_limited7_IP_lowI", op_plot_folder="../plots/3R_CNT_fast_drift_with_limited7_IP_lowI"):
+def PlotAll3R(input_data_folder="../data/3R_CNT_fast_dCNT_fast_drift_wo_IP_lowIrift_with_limited7_IP_lowI", op_plot_folder="../plots/CNT_fast_drift_wo_IP_lowI"):
     # input_data_folder = "./data/CNT_fast_drift_wo_IP_lowI"
     # op_plot_folder = "./plots/CNT_fast_drift_wo_IP_lowI"
     # Path to your JSON file
@@ -273,8 +370,8 @@ def PlotAll3R(input_data_folder="../data/3R_CNT_fast_drift_with_limited7_IP_lowI
     last_activity_ACC_all_th = (last_activity_ACC_all > threshold).astype(float)*last_activity_ACC_all
     
     plot_engram_size(last_activity_HPC_all, threshold=threshold, title = "Engram size (HPC)",fname="{}/engram_size_HPC".format(op_plot_folder))
-    plot_engram_size(last_activity_RSC_all, threshold=threshold,title = "Engram size (RSC)", fname="{}/engram_size_CTX".format(op_plot_folder))
-    plot_engram_size(last_activity_ACC_all, threshold=threshold,title = "Engram size (ACC)", fname="{}/engram_size_CTX".format(op_plot_folder))
+    plot_engram_size(last_activity_RSC_all, threshold=threshold,title = "Engram size (RSC)", fname="{}/engram_size_ACC".format(op_plot_folder))
+    plot_engram_size(last_activity_ACC_all, threshold=threshold,title = "Engram size (ACC)", fname="{}/engram_size_ACC".format(op_plot_folder))
 
     plot_corr_matrix(last_activity_HPC_all_th[0], fname="{}/corr_matrix_hpc".format(op_plot_folder))
     plot_corr_matrix(last_activity_RSC_all_th[0], fname="{}/corr_matrix_rsc".format(op_plot_folder))

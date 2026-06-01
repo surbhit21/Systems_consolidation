@@ -75,13 +75,13 @@ class twolayer_FF:
     def TurnOFF_FB(self):
         self.FB_CTX_MTL = 0.
     def TurnON_FB(self):
-        self.FB_CTX_MTL = 0.17
+        self.FB_CTX_MTL = 0.
     def TurnOFF_FF(self):
         self.FF_MTL_CTX = 0.
     def TurnON_FF(self):
-        self.FF_MTL_CTX = 1.
+        self.FF_MTL_CTX = 1.2
 
-    def step(self, input_FR, op_signal = 0):
+    def step(self, input_FR, op_signal = 0,op_inp = 0):
         """
         Perform one timestep of rate dynamics:
         input_vector: shape [n_MTL]
@@ -91,7 +91,7 @@ class twolayer_FF:
         self.rates_ctx *= (self.rates_ctx > 1e-5).astype(float)
         input_vector = input_FR + self.rec_w @ self.rates - self.FB_CTX_MTL * self.rates_ctx
         input_CTX = input_FR + self.rec_w_ctx @ self.rates_ctx + self.FF_MTL_CTX * self.rates
-        input_op = self.mtl_op_w @ self.rates + self.ctx_op_w @ self.rates_ctx
+        input_op = self.mtl_op_w @ self.rates + self.ctx_op_w @ self.rates_ctx + op_inp
 
         # blanket inhibition to the RNN
         I_inhib = self.I0 + self.I1 * np.sum(self.rates) + self.I2 * np.sum(self.rates**2)
@@ -173,7 +173,7 @@ N_off_days = 11
 n = 10 + (N_off_days)*20 #10 default + 20 neurons per off day
 n_inp = n 
 n_ctx = n 
-E_fl = [1.8]#np.arange(0,4,0.4)
+E_fl = [1.8] #np.arange(0,4,0.4)
 E_fl_ctx = [1.8]#np.arange(0,4,0.4)
 max_e = 10
 E_ref = 0.7
@@ -183,9 +183,9 @@ off_set = 0
 
 
 # base_E[:off_set] += 2
-sim_name = "CNT_fast_drift"
+sim_name = "CNT_fast_drift_OP_HPC"
 notes = "trying with Feedback and feedforward connection of equal strength"
-FC_inp = 19
+FC_inp = 15
 input = FC_inp*np.ones(n_inp)
 zero_input = np.zeros(n_inp)
 mu_ex = 0
@@ -227,7 +227,7 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
                         base_e_ctx=base_e_ctx.copy(), tau=20.0, dt=dt, act=relu,
                         lr=1/1000, decay_r=1/1200, 
                         lr_ctx = 5e-5,decay_r_ctx=0,
-                        lr_op_MTL = 1e-3, lr_op_CTX = 1e-3,
+                        lr_op_MTL = 1e-2, lr_op_CTX = 0,
                         I0=7., I1=0.7, I2=0.03)
         FR_history = []
         FR_history_ctx = []
@@ -253,7 +253,7 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
         nn.excitability_ctx[(off_set+(day)*20): (off_set+(day)*20+20)] += x2
         
         for t in range(ID):
-            next_FR,FR_ctx,FR_op = nn.step(zero_input,0)
+            next_FR,FR_ctx,FR_op = nn.step(zero_input,0,0)
             FR_history.append(next_FR)
             FR_history_ctx.append(FR_ctx)
             FR_op_history.append(FR_op)
@@ -273,9 +273,10 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
             inp_to_network = input                
             if day == 0:
                 op_learning = 1.
+                op_inp = 1.
             else:
                 op_learning = 0.
-                
+                op_inp = 0.
             for rep in range(Nrep):
                 nn.TurnON_FB()
                 nn.TurnON_FF()
@@ -288,21 +289,21 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
                     # nn.TurnON_FB()
                 
                 for t in range(t_off):
-                    next_FR,FR_ctx,FR_op = nn.step(inp_to_network,op_learning)
+                    next_FR,FR_ctx,FR_op = nn.step(inp_to_network,op_learning,op_inp)
                     FR_history.append(next_FR)
                     FR_history_ctx.append(FR_ctx)
                     FR_op_history.append(FR_op)
                     EX_history.append(nn.excitability.copy())
                     EX_history_ctx.append(nn.excitability_ctx.copy())
                     input_history.append(input.copy())
-                day_activity.append(np.mean(FR_history[-t_off:],axis=0))
-                day_activity_ctx.append(np.mean(FR_history_ctx[-t_off:],axis=0))    
+                day_activity.append(np.mean(FR_history[-t_off//2:],axis=0))
+                day_activity_ctx.append(np.mean(FR_history_ctx[-t_off//2:],axis=0))    
                 total_time += t_off
                 t_series.append(total_time)
                 nn.TurnOFF_FB()
                 nn.TurnOFF_FF()
                 for t in range(IR):
-                    next_FR,FR_ctx, FR_op = nn.step(zero_input,0)
+                    next_FR,FR_ctx, FR_op = nn.step(zero_input,0,op_inp)
                     FR_history.append(next_FR)
                     FR_history_ctx.append(FR_ctx)
                     FR_op_history.append(FR_op)
@@ -321,7 +322,7 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
             last_activity.append(np.mean(day_activity,axis=0))
             last_activity_ctx.append(np.mean(day_activity_ctx,axis=0))
             for t in range(ID):
-                next_FR,FR_ctx,FR_op = nn.step(zero_input,0)
+                next_FR,FR_ctx,FR_op = nn.step(zero_input,0,0)
                 FR_history.append(next_FR)
                 FR_history_ctx.append(FR_ctx)
                 FR_op_history.append(FR_op)
@@ -358,7 +359,8 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
     rec_ctx_weights_all = np.stack(rec_ctx_weights_all)
 
     op_data_folder = "./data/{}".format(sim_name)
-    op_plot_folder = "./plots/{}".format(sim_name)# --- IGNORE ---
+    op_plot_folder = "./plots/{}".format(sim_name)
+    
     os.makedirs(op_data_folder, exist_ok=True)
     np.save("{}/rec_weights.npy".format(op_data_folder),rec_weights_all)
     np.save("{}/mtl_op_weights.npy".format(op_data_folder),mtl_op_weights_all)
@@ -424,13 +426,13 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
     filename = "{}/all_params.json".format(op_data_folder)
 
     with open(filename, "w") as f:
-            json.dump(data, f, indent=4)
-        # print(f"All parameters saved to {filename}")
+        json.dump(data, f, indent=4)
+    print(f"All parameters saved to {filename}")
     last_activity_all=  (last_activity_all > threshold).astype(float)*last_activity_all
     last_activity_ctx_all =  (last_activity_ctx_all > threshold).astype(float)*last_activity_ctx_all
     plot_corr_matrix(last_activity_all[0], fname="{}/corr_matrix.svg".format(op_plot_folder))
     plot_corr_matrix(last_activity_ctx_all[0], fname="{}/corr_matrix_ctx.svg".format(op_plot_folder))
-    plt.plot()
+    # plt.plot()
 
     cbars = ["fff5f0ff","fdcab5ff","fc8a6aff","f96044ff","e83429ff","c3161bff","980c13ff",]
     xlabs = ["Day 0"] + [f"Off {i+1}" for i in range(N_off_days-1)]
@@ -470,10 +472,10 @@ for x1,x2 in zip(E_fl,E_fl_ctx):
     op_plot_folder = "./plots/{}".format(sim_name)
     PlotAll(input_data_folder=input_data_folder, op_plot_folder=op_plot_folder)
     
-plt.plot(E_fl,mean_DR,label="HPC")
-plt.plot(E_fl_ctx,mean_DR_ctx,label="CTX")
-plt.xlabel("Excitability boost amplitude")
-plt.ylabel("Normalized drift rate")
-plt.legend()
-plt.savefig("{}/drift_rate_vs_excitability_boost_FB.svg".format("."))
+# plt.plot(E_fl,mean_DR,label="HPC")
+# plt.plot(E_fl_ctx,mean_DR_ctx,label="CTX")
+# plt.xlabel("Excitability boost amplitude")
+# plt.ylabel("Normalized drift rate")
+# plt.legend()
+# plt.savefig("{}/drift_rate_vs_excitability_boost.svg".format("."))
 breakpoint()
