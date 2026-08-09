@@ -1,5 +1,7 @@
 import os
 # from turtle import pd
+import matplotlib
+matplotlib.use("Agg")
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -11,11 +13,32 @@ from sklearn.decomposition import PCA
 # import seaborn as sns
 fformat = [ ".pdf", ".png",".svg"]
 
-PLOT_TITLE_FONTSIZE = 24
-PLOT_LABEL_FONTSIZE = 24
+PLOT_TITLE_FONTSIZE = 18
+PLOT_LABEL_FONTSIZE = 18
 PLOT_TICK_FONTSIZE = 18
 PLOT_COLORBAR_FONTSIZE = 18
 PLOT_LEGEND_FONTSIZE = 18
+
+# Apply the shared typography to direct Matplotlib calls as well as functions
+# that explicitly use the constants below.
+matplotlib.rcParams.update({
+    "axes.titlesize": PLOT_TITLE_FONTSIZE,
+    "axes.labelsize": PLOT_LABEL_FONTSIZE,
+    "xtick.labelsize": PLOT_TICK_FONTSIZE,
+    "ytick.labelsize": PLOT_TICK_FONTSIZE,
+    "legend.fontsize": PLOT_LEGEND_FONTSIZE,
+    "legend.title_fontsize": PLOT_LEGEND_FONTSIZE,
+    "figure.titlesize": PLOT_TITLE_FONTSIZE,
+})
+
+
+def setBoxColors(bp, c, a=1, flipped=False):
+    """Apply one color consistently to all artists in a boxplot."""
+    plt.setp(bp["boxes"], color=c, alpha=a)
+    plt.setp(bp["caps"], color=c, alpha=a)
+    plt.setp(bp["whiskers"], color=c, alpha=a)
+    plt.setp(bp["fliers"], color=c, alpha=a)
+    plt.setp(bp["medians"], color="w" if flipped else c, alpha=a)
 
 
 def style_axis(ax, title=None, xlabel=None, ylabel=None,
@@ -46,7 +69,7 @@ def ensure_dir_exists(file_path):
     if directory and not os.path.exists(directory):
         os.makedirs(directory, exist_ok=True)
 
-def save_plot(filename):
+def save_plot(filename, tight_layout=True):
     """
     Saves a plot to a file.
     
@@ -61,7 +84,8 @@ def save_plot(filename):
     
     # Save the figure
     ensure_dir_exists(filename)
-    plt.tight_layout()
+    if tight_layout:
+        plt.tight_layout()
     print("saving plot to:", filename)
     for ff in fformat:
         plt.savefig(filename+ff, bbox_inches='tight', dpi=300)
@@ -71,11 +95,15 @@ def before_after_weights(initial_weights, final_weights,title1,title2,fname,cmap
     ax = plt.subplot(121)
     ax.set_title(r'$%s$'% title1, fontsize=PLOT_TITLE_FONTSIZE)
     plt.imshow(initial_weights, cmap=cmaps, interpolation='nearest',aspect='auto')
-    plt.colorbar().ax.tick_params(labelsize=PLOT_COLORBAR_FONTSIZE)
+    cbar = plt.colorbar()
+    cbar.set_label("Weights [a.u.]", fontsize=PLOT_LABEL_FONTSIZE)
+    cbar.ax.tick_params(labelsize=PLOT_COLORBAR_FONTSIZE)
     ax = plt.subplot(122)
     ax.set_title(r'$%s$'% title2, fontsize=PLOT_TITLE_FONTSIZE)
     plt.imshow(final_weights, cmap=cmaps, interpolation='nearest',aspect='auto')
-    plt.colorbar().ax.tick_params(labelsize=PLOT_COLORBAR_FONTSIZE)
+    cbar = plt.colorbar()
+    cbar.set_label("Weights [a.u.]", fontsize=PLOT_LABEL_FONTSIZE)
+    cbar.ax.tick_params(labelsize=PLOT_COLORBAR_FONTSIZE)
     
     save_plot(fname)
     plt.show()
@@ -107,7 +135,19 @@ def plot_activities(activity1, activity2, title,var_name, fname, color1='red', c
     # save_plot(fname)  # Uncomment if saving is needed
     plt.show()
     
-def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize=PLOT_TITLE_FONTSIZE, tick_fontsize=PLOT_TICK_FONTSIZE, colorbar_fontsize=PLOT_COLORBAR_FONTSIZE,plot_title ="",com = None):
+def plot_weights_over_time(
+    weights,
+    titles,
+    fname,
+    cmaps='gray_r',
+    title_fontsize=PLOT_TITLE_FONTSIZE,
+    tick_fontsize=PLOT_TICK_FONTSIZE,
+    colorbar_fontsize=PLOT_COLORBAR_FONTSIZE,
+    plot_title="",
+    com=None,
+    in_set=0,
+    colorbar_label="Weights [a.u.]",
+):
     """
     Plots weight matrices from different time points in one row.
 
@@ -116,6 +156,7 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
         titles: List of titles for each subplot.
         fname: Filename to save the complete figure.
         cmaps: List of colormaps (or a single colormap) for the subplots.
+        in_set: If 1, add an inset showing weights among the first 25 neurons.
     """
     # breakpoint()
     num_plots = len(weights)
@@ -138,18 +179,55 @@ def plot_weights_over_time(weights, titles, fname, cmaps='gray_r',title_fontsize
             y_com = np.sum(y_coords * w) / np.sum(w)
             print(x_com,y_com)
             ax.scatter(y_com, x_com, color='red', s=100, edgecolors='white', label='Center of Mass')
+        if in_set == 1:
+            inset_size = min(25, w.shape[0], w.shape[1])
+            inset_ax = ax.inset_axes([0.58, 0.58, 0.38, 0.38])
+            inset_ax.imshow(
+                w[:inset_size, :inset_size],
+                cmap=cmap,
+                interpolation='nearest',
+                aspect='auto',
+                vmin=vmin,
+                vmax=vmax,
+            )
+            inset_ax.set_title("First 25", fontsize=max(8, title_fontsize // 2))
+            inset_ax.tick_params(axis='both', which='major', labelsize=max(6, tick_fontsize // 2))
+            if inset_size > 1:
+                inset_ax.set_xticks([0, inset_size - 1])
+                inset_ax.set_yticks([0, inset_size - 1])
 
     # Shared colorbar
     cax = fig.add_subplot(gs[0, -1])
     cbar = fig.colorbar(ims[0], cax=cax)
-    
+    if colorbar_label:
+        cbar.set_label(colorbar_label, fontsize=PLOT_LABEL_FONTSIZE)
     cbar.ax.tick_params(labelsize=colorbar_fontsize)
 
-    # plt.title(plot_title, fontsize=tick_fontsize)
-    plt.tight_layout()
+    if plot_title:
+        fig.suptitle(plot_title, fontsize=title_fontsize)
+        plt.tight_layout(rect=(0, 0, 1, 0.9))
+    else:
+        plt.tight_layout()
     save_plot(fname)
     plt.show()
     
+def active_input_intervals(input_history, threshold=1e-12):
+    """Return half-open time intervals during which any external input is active."""
+    input_history = np.asarray(input_history)
+    if input_history.ndim == 1:
+        active = np.abs(input_history) > threshold
+    elif input_history.ndim == 2:
+        active = np.any(np.abs(input_history) > threshold, axis=1)
+    else:
+        raise ValueError("input_history must have shape (time,) or (time, inputs).")
+
+    padded = np.pad(active.astype(np.int8), (1, 1))
+    transitions = np.diff(padded)
+    starts = np.flatnonzero(transitions == 1)
+    stops = np.flatnonzero(transitions == -1)
+    return list(zip(starts.tolist(), stops.tolist()))
+
+
 def plot_activity_n_excitability_time(
     weights,
     titles,
@@ -161,6 +239,12 @@ def plot_activity_n_excitability_time(
     colorbar_fontsize=PLOT_COLORBAR_FONTSIZE,
     time_per_day=None,
     day_zero_time=0,
+    colorbar_label="Firing rate (Hz)",
+    input_history=None,
+    input_marker="|",
+    ncols=None,
+    figsize=None,
+    day_labels=None,
 ):
     """
     Plots weight matrices from different time points in one row.
@@ -170,19 +254,42 @@ def plot_activity_n_excitability_time(
         titles: List of titles for each subplot.
         fname: Filename to save the complete figure.
         cmaps: List of colormaps (or a single colormap) for the subplots.
+        colorbar_label: A single label used for every panel, or a list/tuple
+            containing one colorbar label per panel. Use ``None`` or an empty
+            string to omit a panel's colorbar label.
     """
     num_plots = len(weights)
-    plt.figure(figsize=(8 * num_plots, 4))
+    if ncols is None:
+        ncols = num_plots
+    if ncols <= 0:
+        raise ValueError("ncols must be positive")
+    nrows = int(np.ceil(num_plots / ncols))
+    if figsize is None:
+        figsize = (8 * ncols, 4 * nrows)
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        squeeze=False,
+    )
+    flat_axes = axes.ravel()
 
     def time_to_day(time_value):
         return (time_value - day_zero_time) / time_per_day
 
     use_day_axis = time_per_day is not None and time_per_day > 0
 
+    if input_history is not None:
+        input_intervals = active_input_intervals(input_history)
+    else:
+        # Backward-compatible fallback for older callers that only provide
+        # alternating stimulation start/stop boundaries in seqA.
+        input_intervals = list(zip(seqA[0::2], seqA[1::2]))
+
     for idx, (w, title) in enumerate(zip(weights, titles)):
         cmap = cmaps[idx] if isinstance(cmaps, list) else cmaps
         # c_map = LinearSegmentedColormap.from_list("custom_cmap", ['#ffffff',cmap])
-        ax = plt.subplot(1, num_plots, idx + 1)
+        ax = flat_axes[idx]
         ax.set_facecolor("white")
         if use_day_axis:
             x_start = time_to_day(0)
@@ -198,27 +305,57 @@ def plot_activity_n_excitability_time(
             im = ax.imshow(w, cmap=cmap, interpolation='nearest', aspect='auto')
         style_axis(ax, title=title, title_fontsize=title_fontsize, tick_fontsize=tick_fontsize)
         ax.spines[['right', 'top']].set_visible(False)
-        cbar = plt.colorbar(im)
+        cbar = fig.colorbar(im, ax=ax, pad=0.025)
+        if isinstance(colorbar_label, (list, tuple)):
+            if len(colorbar_label) != num_plots:
+                raise ValueError(
+                    "colorbar_label must contain one label per panel"
+                )
+            panel_colorbar_label = colorbar_label[idx]
+        else:
+            panel_colorbar_label = colorbar_label
+        if panel_colorbar_label:
+            cbar.set_label(
+                panel_colorbar_label, fontsize=PLOT_LABEL_FONTSIZE
+            )
         cbar.ax.tick_params(labelsize=colorbar_fontsize)
-        h1 = -10
-        for s in range(int(len(seqA)/2-1)):
-            # print(seqA[2*s], seqA[2*s+1])
-            if use_day_axis:
-                x_vals = [time_to_day(seqA[2*s]), time_to_day(seqA[2*s+1])]
-            else:
-                x_vals = [seqA[2*s], seqA[2*s+1]]
-            ax.plot(x_vals, [h1, h1], 'k')
+        marker_y = -10
+        input_onsets = [start for start, _ in input_intervals]
         if use_day_axis:
-            first_day = int(np.ceil(time_to_day(0)))
-            last_day = int(np.floor(time_to_day(w.shape[1])))
-            ax.set_xticks(np.arange(first_day, last_day + 1, 1))
-            ax.set_xlabel('Time (days)', fontsize=PLOT_LABEL_FONTSIZE)
+            input_onsets = [time_to_day(start) for start in input_onsets]
+        ax.plot(
+            input_onsets,
+            np.full(len(input_onsets), marker_y),
+            linestyle="none",
+            marker=input_marker,
+            color="black",
+            markersize=10,
+            markeredgewidth=1.4,
+            clip_on=False,
+        )
+        if use_day_axis:
+            if day_labels is not None:
+                day_centers = np.arange(len(day_labels), dtype=float) + 0.5
+                ax.set_xticks(day_centers, labels=day_labels)
+            else:
+                first_day = int(np.ceil(time_to_day(0)))
+                last_day = int(np.floor(time_to_day(w.shape[1])))
+                ax.set_xticks(np.arange(first_day, last_day + 1, 1))
+            ax.set_xlabel('Session', fontsize=PLOT_LABEL_FONTSIZE)
         else:
             ax.set_xlabel('Time (a.u.)', fontsize=PLOT_LABEL_FONTSIZE)
         ax.set_ylabel('Neurons', fontsize=PLOT_LABEL_FONTSIZE)
         ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
-    plt.tight_layout()
-    save_plot(fname)
+    for unused_ax in flat_axes[num_plots:]:
+        unused_ax.set_visible(False)
+    fig.subplots_adjust(
+        left=0.09,
+        right=0.90,
+        bottom=0.10,
+        top=0.94,
+        hspace=0.55,
+    )
+    save_plot(fname, tight_layout=False)
     plt.show()
 def plot_row_correlations(ref_activity,data_2d,xlabs, title, fname, use_bar_plot=False,font_size=PLOT_LABEL_FONTSIZE, tick_fontsize=PLOT_TICK_FONTSIZE):
     """
@@ -437,7 +574,8 @@ def plot_mean_std_corr_over_time(
     marker='o',
     linewidth=3,
     bar_plot = False,
-    no_plot = False
+    no_plot = False,
+    xlab = "Days"
 ):
     """
     Compute & plot mean ± sem of correlations over time across simulations (errorbar plot).
@@ -537,11 +675,11 @@ def plot_mean_std_corr_over_time(
 
     # styling
     ax.spines[["right", "top"]].set_visible(False)
-    style_axis(ax, title=title, xlabel="Days", ylabel="PV Correlation",
+    style_axis(ax, title=title, xlabel=xlab, ylabel="PV Correlation",
                title_fontsize=font_size, label_fontsize=font_size, tick_fontsize=tick_fontsize)
     ax.set_xticks(x, xlabels)
     y_min = mean_corr.min() - sem_corr.max()
-    ax.set_ylim([-0.1,1.1])
+    ax.set_ylim([0, 1.1])
     ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
     fig.tight_layout()
 
@@ -561,6 +699,88 @@ def plot_mean_std_corr_over_time(
 
     return mean_corr, sem_corr, per_sim_corr, sel_time_idx
 
+
+
+def plot_population_vector_correlations(
+    correlation_series,
+    sem_series,
+    xlabels,
+    labels,
+    fname=None,
+    title="Cell population \n activity correlation",
+    colors=None,
+    markers=None,
+    font_size=PLOT_LABEL_FONTSIZE,
+    tick_fontsize=PLOT_TICK_FONTSIZE,
+    linewidth=3,
+    capsize=5,
+):
+    """
+    Plot multiple population-vector correlation curves on the same axes.
+    """
+    if not (len(correlation_series) == len(sem_series) == len(labels)):
+        raise ValueError("correlation_series, sem_series, and labels must have the same length.")
+
+    n_points = len(correlation_series[0])
+    if len(xlabels) != n_points:
+        raise ValueError(f"len(xlabels)={len(xlabels)} must equal number of points={n_points}.")
+    for corr, sem in zip(correlation_series, sem_series):
+        if len(corr) != n_points or len(sem) != n_points:
+            raise ValueError("All correlation and SEM arrays must have the same length.")
+
+    if colors is None:
+        colors = ["tab:orange", "tab:blue", "tab:green", "tab:red"]
+    if markers is None:
+        markers = ["^", "o", "s", "D"]
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    x = np.arange(n_points)
+
+    for i, (corr, sem, label) in enumerate(zip(correlation_series, sem_series, labels)):
+        color = colors[i % len(colors)]
+        marker = markers[i % len(markers)]
+        ax.errorbar(
+            x,
+            corr,
+            yerr=sem,
+            fmt=marker + "-",
+            markersize=8,
+            linewidth=linewidth,
+            capsize=capsize,
+            color=color,
+            ecolor=color,
+            elinewidth=2,
+            alpha=0.9,
+            label=label,
+        )
+
+    ax.spines[["right", "top"]].set_visible(False)
+    style_axis(
+        ax,
+        title=title,
+        xlabel="Days",
+        ylabel="PV Correlation",
+        title_fontsize=font_size,
+        label_fontsize=font_size,
+        tick_fontsize=tick_fontsize,
+    )
+    ax.set_xticks(x, xlabels)
+    ax.set_ylim(ymin=0)
+    ax.legend(frameon=False, fontsize=tick_fontsize)
+    ax.tick_params(axis="both", which="major", labelsize=tick_fontsize)
+    fig.tight_layout()
+
+    if fname is not None:
+        try:
+            save_plot(fname)
+        except NameError:
+            plt.savefig(fname, dpi=200)
+        plt.show()
+        plt.close(fig)
+    else:
+        plt.show()
+
+    return fig, ax
 
 
 def plot_first_activity_vs_active_sessions(
@@ -693,7 +913,7 @@ def plot_sessions_count_vs_activity_sem(
     tick_fontsize=PLOT_TICK_FONTSIZE,
     capsize=5,
     colors=None,
-    title="Activity in first session vs. # sessions active (mean ± SEM)"
+    title="Encoding activity predicts offline engram persistence"
 ):
     """
     Makes a bar plot: x = number of sessions a neuron is active in (>threshold),
@@ -804,8 +1024,8 @@ def plot_sessions_count_vs_activity_sem(
     ax.errorbar(x, mean_vals, yerr=sem_vals, capsize=capsize, alpha=0.9)
 
     ax.spines[["right", "top"]].set_visible(False)
-    style_axis(ax, title=title, xlabel="# sessions active (> threshold)",
-               ylabel="Activity (mean ± SEM)",
+    style_axis(ax, title=title, xlabel="# of offline sessions active",
+               ylabel="Firing rate (Hz)",
                title_fontsize=font_size, label_fontsize=font_size, tick_fontsize=tick_fontsize)
     ax.set_xticks(x, counts_unique)
     ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
