@@ -13,11 +13,11 @@ from sklearn.decomposition import PCA
 # import seaborn as sns
 fformat = [ ".pdf", ".png",".svg"]
 
-PLOT_TITLE_FONTSIZE = 18
-PLOT_LABEL_FONTSIZE = 18
-PLOT_TICK_FONTSIZE = 18
-PLOT_COLORBAR_FONTSIZE = 18
-PLOT_LEGEND_FONTSIZE = 18
+PLOT_TITLE_FONTSIZE = 22
+PLOT_LABEL_FONTSIZE = 22
+PLOT_TICK_FONTSIZE = 20
+PLOT_COLORBAR_FONTSIZE = 22
+PLOT_LEGEND_FONTSIZE = 22
 
 # Apply the shared typography to direct Matplotlib calls as well as functions
 # that explicitly use the constants below.
@@ -226,6 +226,116 @@ def active_input_intervals(input_history, threshold=1e-12):
     starts = np.flatnonzero(transitions == 1)
     stops = np.flatnonzero(transitions == -1)
     return list(zip(starts.tolist(), stops.tolist()))
+
+
+def plot_synapse_weight_trajectories(
+    trajectories,
+    input_history,
+    fname,
+    time_per_day,
+    upper_ceiling=1.0,
+    start_day=0.0,
+    title="Strongest potentiated ACC synapse",
+):
+    """Plot one fixed ACC recurrent synapse per simulation over time."""
+    trajectories = np.asarray(trajectories)
+    if trajectories.ndim != 2:
+        raise ValueError("trajectories must have shape (simulations, time)")
+    if time_per_day <= 0:
+        raise ValueError("time_per_day must be positive")
+
+    representative_input = np.asarray(input_history)
+    if representative_input.ndim == 3:
+        representative_input = representative_input[0]
+    if representative_input.shape[0] != trajectories.shape[1]:
+        raise ValueError(
+            "input_history and synapse trajectories must have equal duration"
+        )
+
+    x = start_day + np.arange(trajectories.shape[1]) / time_per_day
+    fig, ax = plt.subplots(figsize=(12, 5))
+    colors = plt.get_cmap("tab10")(np.linspace(0, 1, trajectories.shape[0]))
+    for sim_idx, (trace, color) in enumerate(zip(trajectories, colors), start=1):
+        ax.plot(x, trace, color=color, linewidth=1.4, label=f"Simulation {sim_idx}")
+
+    ax.axhline(
+        upper_ceiling, color="0.35", linestyle="--", linewidth=1.2,
+        label="Upper ceiling",
+    )
+    bar_y = upper_ceiling + 0.035
+    for start, stop in active_input_intervals(representative_input):
+        ax.hlines(
+            bar_y,
+            start_day + start / time_per_day,
+            start_day + stop / time_per_day,
+            color="black",
+            linewidth=4,
+            clip_on=False,
+        )
+
+    style_axis(
+        ax, title=title, xlabel="Day",
+        ylabel="ACC recurrent weight (a.u.)",
+    )
+    ax.set_ylim(0, upper_ceiling + 0.08)
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.legend(frameon=False, ncols=2, fontsize=PLOT_LEGEND_FONTSIZE)
+    fig.tight_layout()
+    save_plot(fname)
+    plt.close(fig)
+
+
+def plot_synapse_weight_snapshots(
+    trajectories,
+    fname,
+    upper_ceiling=1.0,
+    title="Strongest ACC recurrent synapse across days",
+    day_labels=None,
+    active_fraction=1.0 / 3.0,
+):
+    """Plot daily snapshots of one fixed recurrent synapse per simulation."""
+    trajectories = np.asarray(trajectories)
+    if trajectories.ndim != 2:
+        raise ValueError("trajectories must have shape (simulations, days)")
+    n_simulations, n_days = trajectories.shape
+    if day_labels is None:
+        day_labels = [f"Day {day}" for day in range(n_days)]
+    if len(day_labels) != n_days:
+        raise ValueError("day_labels must contain one label per snapshot")
+
+    x = np.arange(n_days, dtype=float)
+    fig, ax = plt.subplots(figsize=(12, 5))
+    colors = plt.get_cmap("tab10")(np.linspace(0, 1, n_simulations))
+    for sim_idx, (trace, color) in enumerate(zip(trajectories, colors), start=1):
+        ax.plot(
+            x, trace, marker="o", markersize=4, linewidth=1.5,
+            color=color, label=f"Simulation {sim_idx}",
+        )
+
+    ax.axhline(
+        upper_ceiling, color="0.35", linestyle="--", linewidth=1.2,
+        label="Upper ceiling",
+    )
+    bar_y = upper_ceiling + 0.035
+    half_width = max(0.02, active_fraction / 2.0)
+    for day in x:
+        ax.hlines(
+            bar_y, day - half_width, day + half_width,
+            color="black", linewidth=4, clip_on=False,
+        )
+
+    style_axis(
+        ax, title=title, xlabel="Simulation day",
+        ylabel="ACC recurrent weight (a.u.)",
+    )
+    ax.set_xticks(x, labels=day_labels, rotation=45, ha="right")
+    ax.set_xlim(-0.5, n_days - 0.5)
+    ax.set_ylim(0, upper_ceiling + 0.08)
+    ax.spines[["right", "top"]].set_visible(False)
+    ax.legend(frameon=False, ncols=2, fontsize=PLOT_LEGEND_FONTSIZE)
+    fig.tight_layout()
+    save_plot(fname)
+    plt.close(fig)
 
 
 def plot_activity_n_excitability_time(

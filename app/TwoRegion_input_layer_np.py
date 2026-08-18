@@ -20,6 +20,18 @@ def relu(x):
     return np.maximum(0, x)
 
 
+def stable_random_recurrent(n_neurons, scale=0.05, spectral_radius=0.8):
+    """Initialize a non-negative recurrent matrix with controlled spectral radius."""
+    weights = np.abs(np.random.normal(0, scale, size=(n_neurons, n_neurons)))
+    np.fill_diagonal(weights, 0.0)
+
+    eigvals = np.linalg.eigvals(weights)
+    radius = np.max(np.abs(eigvals))
+    if radius > 0:
+        weights *= spectral_radius / radius
+    return weights
+
+
 class twolayer_input_FF:
     def __init__(self, n_inp, n_MTL, n_CTX, baseline_e, base_e_ctx, tau=20.0, dt=1.0, act='relu',
                  lr=1/800, decay_r=1/1000,
@@ -29,7 +41,9 @@ class twolayer_input_FF:
                  threshold=5,
                  lr_op=1/1000,
                  I0=1, I1=0.05, I2=0.001, Iw=0.01,
-                 I0_ctx=1, I1_ctx=0.05, I2_ctx=0.001, Iw_ctx=0.01, tag_threshold=2.):
+                 I0_ctx=1, I1_ctx=0.05, I2_ctx=0.001, Iw_ctx=0.01, tag_threshold=2.,
+                 rec_init_scale=0.05, rec_init_radius=0.8,
+                 rec_ctx_init_scale=0.05, rec_ctx_init_radius=0.8):
         # Store population sizes and integration constants.
         self.n_MTL = n_MTL
         self.n_CTX = n_CTX
@@ -106,8 +120,12 @@ class twolayer_input_FF:
         self.input_w_ctx = np.abs(np.random.normal(0, 0.05, size=(n_inp, n_CTX)))
         self.input_w_hpc = self._normalize_input_rows(self.input_w_hpc)
         self.input_w_ctx = self._normalize_input_rows(self.input_w_ctx)
-        self.rec_w = np.zeros((n_MTL, n_MTL))
-        self.rec_w_ctx = np.zeros((self.n_CTX, self.n_CTX))
+        self.rec_w = stable_random_recurrent(
+            n_MTL, scale=rec_init_scale, spectral_radius=rec_init_radius
+        )
+        self.rec_w_ctx = stable_random_recurrent(
+            self.n_CTX, scale=rec_ctx_init_scale, spectral_radius=rec_ctx_init_radius
+        )
         
         # Output weights
         self.mtl_op_w = 0 * np.abs(np.random.normal(0, 0.05, size=(self.op_neuron, n_MTL)))
